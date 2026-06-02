@@ -1,7 +1,9 @@
 from datetime import date
+from pathlib import Path
 
-from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query
+from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import PlainTextResponse
 from sqlalchemy.orm import Session
 
 from app.bootstrap import seed_defaults
@@ -267,3 +269,95 @@ def _project_out(project: Project) -> ProjectOut:
         created_at=project.created_at,
         queries=[query.query for query in project.queries],
     )
+
+
+# --------------- Skill file serving ---------------
+
+SKILL_DIR = Path(__file__).resolve().parents[2] / "skills" / "agent-memory-daily-report"
+
+INSTALL_SH_TEMPLATE = r"""#!/usr/bin/env bash
+# Agent Memory Daily Report Skill 安装脚本
+# 用法（默认装到 Claude Code skills 目录）：
+#   curl -fsSL {base_url}/api/skill/install.sh | bash
+#
+# 装到其他 Agent 平台：
+#   SKILL_DIR=$HOME/.codex/skills/agent-memory-daily-report  bash <(curl -fsSL {base_url}/api/skill/install.sh)
+#   SKILL_DIR=$HOME/.gemini/skills/agent-memory-daily-report bash <(curl -fsSL {base_url}/api/skill/install.sh)
+set -e
+
+DEFAULT_DIR="$HOME/.claude/skills/agent-memory-daily-report"
+SKILL_DIR="${{SKILL_DIR:-$DEFAULT_DIR}}"
+BASE_URL="{base_url}"
+
+echo ""
+echo "Installing Agent Memory Daily Report Skill"
+echo "  → $SKILL_DIR"
+echo ""
+
+mkdir -p "$SKILL_DIR/scripts"
+mkdir -p "$SKILL_DIR/references"
+
+curl -fsSL "$BASE_URL/api/skill/SKILL.md"                -o "$SKILL_DIR/SKILL.md"
+curl -fsSL "$BASE_URL/api/skill/scripts/daily_report.py" -o "$SKILL_DIR/scripts/daily_report.py"
+curl -fsSL "$BASE_URL/api/skill/references/api.md"       -o "$SKILL_DIR/references/api.md"
+chmod +x "$SKILL_DIR/scripts/daily_report.py"
+
+cat > "$SKILL_DIR/.memory-report-skill.json" <<JSON
+{{
+  "api_base": "$BASE_URL",
+  "webhook_url": "",
+  "webhook_type": "generic"
+}}
+JSON
+
+echo ""
+echo "✓ Done."
+echo ""
+echo "  API Base: $BASE_URL"
+echo "  Config:   $SKILL_DIR/.memory-report-skill.json"
+echo ""
+echo "Next: restart your Agent or start a new conversation, then try:"
+echo "  - 获取今天的 Agent Memory 市场日报"
+echo "  - 推送日报到飞书群"
+echo ""
+echo "Other Agent platforms (re-run with SKILL_DIR set):"
+echo "  Codex CLI:    SKILL_DIR=\$HOME/.codex/skills/agent-memory-daily-report  bash <(curl -fsSL $BASE_URL/api/skill/install.sh)"
+echo "  Gemini CLI:   SKILL_DIR=\$HOME/.gemini/skills/agent-memory-daily-report bash <(curl -fsSL $BASE_URL/api/skill/install.sh)"
+echo ""
+"""
+
+
+def _get_base_url(request: Request) -> str:
+    scheme = request.headers.get("x-forwarded-proto", request.url.scheme)
+    host = request.headers.get("x-forwarded-host", request.headers.get("host", ""))
+    return f"{scheme}://{host}"
+
+
+@app.get("/api/skill/install.sh", response_class=PlainTextResponse)
+def skill_install_sh(request: Request) -> str:
+    base_url = _get_base_url(request)
+    return INSTALL_SH_TEMPLATE.format(base_url=base_url)
+
+
+@app.get("/api/skill/SKILL.md", response_class=PlainTextResponse)
+def skill_md() -> str:
+    path = SKILL_DIR / "SKILL.md"
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="SKILL.md not found")
+    return path.read_text(encoding="utf-8")
+
+
+@app.get("/api/skill/scripts/daily_report.py", response_class=PlainTextResponse)
+def skill_script() -> str:
+    path = SKILL_DIR / "scripts" / "daily_report.py"
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="daily_report.py not found")
+    return path.read_text(encoding="utf-8")
+
+
+@app.get("/api/skill/references/api.md", response_class=PlainTextResponse)
+def skill_api_ref() -> str:
+    path = SKILL_DIR / "references" / "api.md"
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="api.md not found")
+    return path.read_text(encoding="utf-8")

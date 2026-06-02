@@ -29,6 +29,7 @@ services:
       - .env
     volumes:
       - app_data:/app/data
+      - ./skills:/app/skills:ro
     restart: unless-stopped
     depends_on:
       redis:
