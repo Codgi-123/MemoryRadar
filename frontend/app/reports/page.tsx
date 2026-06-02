@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { ChevronDown, ChevronRight, RefreshCw, FileText } from 'lucide-react'
-import { publicBase, formatDate, formatRelativeTime } from '@/lib/api'
+import { apiGet, apiPost, formatDate, formatRelativeTime } from '@/lib/api'
 import { MarkdownContent } from '@/components/MarkdownContent'
 
 interface ReportOut {
@@ -18,8 +18,7 @@ export default function ReportsPage() {
 
   const fetchReports = useCallback(async () => {
     try {
-      const res = await fetch(`${publicBase}/api/reports/daily`)
-      const data: ReportOut[] = await res.json()
+      const data = await apiGet<ReportOut[]>('/api/reports/daily')
       setReports(data)
       if (data.length > 0) setExpandedIds(new Set([data[0].id]))
     } catch {} finally { setLoading(false) }
@@ -31,7 +30,7 @@ export default function ReportsPage() {
     setGenerating(true)
     try {
       const today = new Date().toISOString().slice(0, 10)
-      await fetch(`${publicBase}/api/reports/daily/${today}/regenerate`, { method: 'POST' })
+      await apiPost(`/api/reports/daily/${today}/regenerate`)
       await fetchReports()
     } catch {} finally { setGenerating(false) }
   }

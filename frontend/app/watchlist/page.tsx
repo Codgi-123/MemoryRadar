@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { Plus, Edit2, Trash2, ExternalLink, X, Download, Upload } from 'lucide-react'
-import { publicBase, apiPost, apiPatch, apiDelete } from '@/lib/api'
+import { apiGet, apiPost, apiPatch, apiDelete } from '@/lib/api'
 import { Toast } from '../components/Toast'
 
 interface Project {
@@ -30,10 +30,11 @@ export default function WatchlistPage() {
 
   const fetchProjects = useCallback(async () => {
     try {
-      const res = await fetch(`${publicBase}/api/watchlist/projects`)
-      const data = await res.json()
+      const data = await apiGet<Project[]>('/api/watchlist/projects')
       setProjects(data)
-    } catch { /* ignore */ } finally { setLoading(false) }
+    } catch {
+      setToast({ message: '追踪列表加载失败，请检查后端服务', type: 'error' })
+    } finally { setLoading(false) }
   }, [])
 
   useEffect(() => { fetchProjects() }, [fetchProjects])
@@ -73,9 +74,7 @@ export default function WatchlistPage() {
 
   const handleExport = async () => {
     try {
-      const res = await fetch(`${publicBase}/api/watchlist/export`)
-      if (!res.ok) throw new Error('export failed')
-      const data = await res.json()
+      const data = await apiGet('/api/watchlist/export')
       const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
       const url = URL.createObjectURL(blob)
       const link = document.createElement('a')
@@ -97,13 +96,7 @@ export default function WatchlistPage() {
       const text = await file.text()
       const data = JSON.parse(text)
       const payload = Array.isArray(data) ? { projects: data } : data
-      const res = await fetch(`${publicBase}/api/watchlist/import`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(payload),
-      })
-      if (!res.ok) throw new Error('import failed')
-      const result = await res.json()
+      const result = await apiPost<{ created: number; updated: number }>('/api/watchlist/import', payload)
       setToast({ message: `导入完成：新增 ${result.created}，更新 ${result.updated}`, type: 'success' })
       fetchProjects()
     } catch {

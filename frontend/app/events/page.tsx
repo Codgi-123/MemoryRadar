@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { Search, ExternalLink, ChevronLeft, ChevronRight } from 'lucide-react'
-import { publicBase, formatDate } from '@/lib/api'
+import { apiGet, apiPatch, formatDate } from '@/lib/api'
 
 interface EventOut {
   id: number; entity: string; event_type: string; title: string; summary: string
@@ -26,8 +26,7 @@ export default function EventsPage() {
       const params = new URLSearchParams({ limit: '200' })
       if (statusFilter) params.set('status', statusFilter)
       if (entityFilter) params.set('entity', entityFilter)
-      const res = await fetch(`${publicBase}/api/events?${params}`)
-      const data = await res.json()
+      const data = await apiGet<EventOut[]>(`/api/events?${params}`)
       setEvents(data)
     } catch {} finally { setLoading(false) }
   }, [statusFilter, entityFilter])
@@ -47,13 +46,8 @@ export default function EventsPage() {
 
   const updateStatus = async (id: number, newStatus: string) => {
     try {
-      const res = await fetch(`${publicBase}/api/events/${id}`, {
-        method: 'PATCH', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: newStatus })
-      })
-      if (res.ok) {
-        setEvents(prev => prev.map(e => e.id === id ? { ...e, status: newStatus } : e))
-      }
+      await apiPatch(`/api/events/${id}`, { status: newStatus })
+      setEvents(prev => prev.map(e => e.id === id ? { ...e, status: newStatus } : e))
     } catch {}
   }
 

@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react'
 import { Play, RefreshCw, Database, ChevronDown, ChevronRight } from 'lucide-react'
-import { publicBase, formatDateTime } from '@/lib/api'
+import { apiGet, apiPost, formatDateTime } from '@/lib/api'
 
 interface JobRunOut {
   id: number; job_type: string; status: string
@@ -18,8 +18,7 @@ export default function JobsPage() {
 
   const fetchJobs = useCallback(async () => {
     try {
-      const res = await fetch(`${publicBase}/api/jobs`)
-      setJobs(await res.json())
+      setJobs(await apiGet<JobRunOut[]>('/api/jobs'))
     } catch {} finally { setLoading(false) }
   }, [])
 
@@ -40,7 +39,7 @@ export default function JobsPage() {
   const trigger = async (endpoint: string, label: string) => {
     setActing(label)
     try {
-      await fetch(`${publicBase}${endpoint}`, { method: 'POST' })
+      await apiPost(endpoint)
       setTimeout(fetchJobs, 2000)
     } catch {} finally { setTimeout(() => setActing(null), 2000) }
   }
