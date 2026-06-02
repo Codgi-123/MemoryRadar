@@ -65,11 +65,14 @@ export default function SkillsPage() {
   }, [])
 
   const skillName = 'agent-memory-daily-report'
-  const installUrl = `${apiBase}/api/skill/install.sh`
+  const skillMdUrl = `${apiBase}/agent-memory-daily-report/SKILL.md`
+  const installUrl = `${apiBase}/agent-memory-daily-report/install.sh`
 
   const installCmd = `curl -fsSL ${installUrl} | bash`
   const installCodex = `SKILL_DIR=$HOME/.codex/skills/${skillName} bash <(curl -fsSL ${installUrl})`
   const installGemini = `SKILL_DIR=$HOME/.gemini/skills/${skillName} bash <(curl -fsSL ${installUrl})`
+
+  const agentInstruction = `参考 ${skillMdUrl} ，安装这个 Agent Skill`
 
   const configJson = useMemo(() => JSON.stringify({
     api_base: apiBase || 'AUTO_DETECTED_API_BASE',
@@ -86,6 +89,22 @@ export default function SkillsPage() {
       <div className="page-header">
         <h1>Agent Skills</h1>
         <p>一行命令安装「Agent Memory 市场日报」Skill，让其他 Agent 能自动获取和推送每日日报。</p>
+      </div>
+
+      {/* 给 Agent 的指令 */}
+      <div className="card" style={{ borderColor: 'var(--accent)', background: 'var(--accent-soft)' }}>
+        <div className="card-header" style={{ borderBottom: 'none', paddingBottom: 0, marginBottom: 12 }}>
+          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: 'var(--accent)' }}>
+            <Puzzle size={17} /> 让 Agent 安装此 Skill
+          </span>
+        </div>
+        <p className="text-sm" style={{ marginBottom: 12 }}>
+          直接把下面这句话发给你的 Agent（Claude Code / Codex / Cursor / Gemini CLI），它会自动读取 SKILL.md 并执行安装：
+        </p>
+        <CodeBlock value={agentInstruction} />
+        <p className="text-muted text-sm" style={{ marginTop: 12 }}>
+          Agent 会访问上面的 SKILL.md 链接（纯文本 Markdown），读到安装命令后自动执行 <code>curl ... | bash</code> 完成安装。
+        </p>
       </div>
 
       {/* 一键安装 */}
@@ -107,7 +126,7 @@ export default function SkillsPage() {
           <a className="btn btn-secondary" href={installUrl} target="_blank" rel="noopener noreferrer">
             <ExternalLink size={15} /> 查看 install.sh
           </a>
-          <a className="btn btn-secondary" href={`${apiBase}/api/skill/SKILL.md`} target="_blank" rel="noopener noreferrer">
+          <a className="btn btn-secondary" href={skillMdUrl} target="_blank" rel="noopener noreferrer">
             <ExternalLink size={15} /> 查看 SKILL.md
           </a>
         </div>

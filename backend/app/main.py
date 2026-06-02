@@ -343,11 +343,13 @@ def skill_install_sh(request: Request) -> str:
 
 
 @app.get("/api/skill/SKILL.md", response_class=PlainTextResponse)
-def skill_md() -> str:
+def skill_md(request: Request) -> str:
     path = SKILL_DIR / "SKILL.md"
     if not path.exists():
         raise HTTPException(status_code=404, detail="SKILL.md not found")
-    return path.read_text(encoding="utf-8")
+    base_url = _get_base_url(request)
+    content = path.read_text(encoding="utf-8")
+    return content.replace("{{BASE_URL}}", base_url)
 
 
 @app.get("/api/skill/scripts/daily_report.py", response_class=PlainTextResponse)

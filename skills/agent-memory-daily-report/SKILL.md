@@ -7,26 +7,44 @@ description: Fetch generated Agent Memory daily reports from a Memory Market Wat
 
 Use this skill to retrieve generated Agent Memory market daily reports and push them to another agent, chat channel, webhook, or scheduler.
 
-## Configuration
+## Installation
 
-Open the Memory Watcher frontend and visit `/skills`. The page generates deployment-specific configuration from the current browser host and the configured API endpoint.
-
-Preferred config file:
+One-line install (auto-detects platform):
 
 ```bash
-cat > .memory-report-skill.json <<'JSON'
+curl -fsSL {{BASE_URL}}/agent-memory-daily-report/install.sh | bash
+```
+
+Other Agent platforms:
+
+```bash
+# Codex CLI
+SKILL_DIR=$HOME/.codex/skills/agent-memory-daily-report bash <(curl -fsSL {{BASE_URL}}/agent-memory-daily-report/install.sh)
+
+# Gemini CLI
+SKILL_DIR=$HOME/.gemini/skills/agent-memory-daily-report bash <(curl -fsSL {{BASE_URL}}/agent-memory-daily-report/install.sh)
+```
+
+The install script will:
+1. Download SKILL.md, daily_report.py, and api.md into the skills directory
+2. Auto-generate `.memory-report-skill.json` config with the correct API base URL
+
+## Configuration
+
+After installation, the config file `.memory-report-skill.json` in the skill directory contains:
+
+```json
 {
-  "api_base": "GENERATED_BY_THE_/skills_PAGE",
-  "webhook_url": "https://...",
+  "api_base": "{{BASE_URL}}",
+  "webhook_url": "",
   "webhook_type": "generic"
 }
-JSON
 ```
 
 Environment-variable alternative:
 
 ```bash
-export MEMORY_REPORT_API_BASE="GENERATED_BY_THE_/skills_PAGE"
+export MEMORY_REPORT_API_BASE="{{BASE_URL}}"
 export MEMORY_REPORT_WEBHOOK_URL="https://..."
 export MEMORY_REPORT_WEBHOOK_TYPE="generic"  # generic | feishu | dingtalk | slack
 ```
@@ -80,7 +98,7 @@ python skills/agent-memory-daily-report/scripts/daily_report.py push \
 For cron:
 
 ```cron
-30 8 * * * cd /path/to/project && MEMORY_REPORT_API_BASE=http://127.0.0.1:8000 MEMORY_REPORT_WEBHOOK_URL=https://... MEMORY_REPORT_WEBHOOK_TYPE=feishu python skills/agent-memory-daily-report/scripts/daily_report.py push --date today
+30 8 * * * cd /path/to/project && MEMORY_REPORT_API_BASE={{BASE_URL}} MEMORY_REPORT_WEBHOOK_URL=https://... MEMORY_REPORT_WEBHOOK_TYPE=feishu python skills/agent-memory-daily-report/scripts/daily_report.py push --date today
 ```
 
 If the host environment has its own automation/reminder system, schedule that same command after the report generation time.
@@ -91,7 +109,7 @@ When another agent uses this skill:
 
 1. Check `MEMORY_REPORT_API_BASE`.
    - If it is absent, look for `.memory-report-skill.json`.
-   - If both are absent, ask the user to open Memory Watcher `/skills` and copy the generated config.
+   - If both are absent, run the install command above.
 2. Fetch the target report by date; use `--latest` only when the user asks for the newest report.
 3. If pushing, use the channel-specific webhook type.
 4. Preserve Markdown links in the report; do not strip source URLs.
