@@ -3,7 +3,13 @@
 import { useEffect, useMemo, useState } from 'react'
 import { Check, Copy, ExternalLink, Puzzle, Send, Terminal } from 'lucide-react'
 
-const configuredApiUrl = process.env.NEXT_PUBLIC_API_URL || ''
+const configuredApiUrl = normalizeConfiguredApiUrl(process.env.NEXT_PUBLIC_API_URL)
+
+function normalizeConfiguredApiUrl(value: string | undefined) {
+  const raw = value?.trim()
+  if (!raw || raw === 'undefined' || raw === 'null') return ''
+  return raw
+}
 
 type WebhookType = 'generic' | 'feishu' | 'dingtalk' | 'slack'
 

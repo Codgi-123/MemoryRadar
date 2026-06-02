@@ -1,8 +1,19 @@
-const PUBLIC_API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+function normalizeApiBase(value: string | undefined) {
+  const raw = value?.trim()
+  if (raw && raw !== 'undefined' && raw !== 'null') {
+    return raw.replace(/\/$/, '')
+  }
+  if (typeof window !== 'undefined') {
+    return `${window.location.protocol}//${window.location.hostname}:8000`
+  }
+  return 'http://localhost:8000'
+}
+
+const PUBLIC_API_BASE = normalizeApiBase(process.env.NEXT_PUBLIC_API_URL)
 
 function apiBase() {
   if (typeof window === 'undefined') {
-    return process.env.API_INTERNAL_URL || process.env.INTERNAL_API_BASE_URL || PUBLIC_API_BASE
+    return normalizeApiBase(process.env.API_INTERNAL_URL || process.env.INTERNAL_API_BASE_URL || PUBLIC_API_BASE)
   }
   return PUBLIC_API_BASE
 }
