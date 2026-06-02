@@ -273,7 +273,10 @@ def _project_out(project: Project) -> ProjectOut:
 
 # --------------- Skill file serving ---------------
 
-SKILL_DIR = Path(__file__).resolve().parents[2] / "skills" / "agent-memory-daily-report"
+_APP_ROOT = Path(__file__).resolve().parent.parent  # /app in Docker, backend/ locally
+SKILL_DIR = _APP_ROOT / "skills" / "agent-memory-daily-report"
+if not SKILL_DIR.exists():
+    SKILL_DIR = _APP_ROOT.parent / "skills" / "agent-memory-daily-report"
 
 INSTALL_SH_TEMPLATE = r"""#!/usr/bin/env bash
 # Agent Memory Daily Report Skill 安装脚本
