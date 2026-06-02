@@ -1,13 +1,20 @@
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+const PUBLIC_API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:8000'
+
+function apiBase() {
+  if (typeof window === 'undefined') {
+    return process.env.API_INTERNAL_URL || process.env.INTERNAL_API_BASE_URL || PUBLIC_API_BASE
+  }
+  return PUBLIC_API_BASE
+}
 
 export async function apiGet<T>(path: string): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, { cache: 'no-store' })
+  const res = await fetch(`${apiBase()}${path}`, { cache: 'no-store' })
   if (!res.ok) throw new Error(`API error: ${res.status}`)
   return res.json()
 }
 
 export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
+  const res = await fetch(`${apiBase()}${path}`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
     body: body ? JSON.stringify(body) : undefined,
@@ -17,7 +24,7 @@ export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
 }
 
 export async function apiPatch<T>(path: string, body: unknown): Promise<T> {
-  const res = await fetch(`${API_BASE}${path}`, {
+  const res = await fetch(`${apiBase()}${path}`, {
     method: 'PATCH',
     headers: { 'Content-Type': 'application/json' },
     body: JSON.stringify(body),
@@ -27,7 +34,7 @@ export async function apiPatch<T>(path: string, body: unknown): Promise<T> {
 }
 
 export async function apiDelete(path: string): Promise<void> {
-  const res = await fetch(`${API_BASE}${path}`, { method: 'DELETE' })
+  const res = await fetch(`${apiBase()}${path}`, { method: 'DELETE' })
   if (!res.ok) throw new Error(`API error: ${res.status}`)
 }
 

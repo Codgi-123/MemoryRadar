@@ -879,6 +879,31 @@ body {
   gap: 16px;
 }
 
+.skill-code {
+  position: relative;
+  margin-top: 10px;
+}
+
+.skill-code pre {
+  background: #0f172a;
+  border-radius: var(--radius);
+  color: #e2e8f0;
+  font-family: var(--font-mono);
+  font-size: 0.82rem;
+  line-height: 1.7;
+  overflow-x: auto;
+  padding: 18px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.skill-copy {
+  position: absolute;
+  right: 10px;
+  top: 10px;
+  z-index: 1;
+}
+
 /* ===== Cold Start Banner ===== */
 .cold-start-banner {
   padding: 12px 18px;

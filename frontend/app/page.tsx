@@ -1,4 +1,4 @@
-import { apiGet, formatDateTime } from '@/lib/api'
+import { apiGet, formatDateTime, publicBase } from '@/lib/api'
 import Link from 'next/link'
 import { LayoutDashboard, Zap, Star, FileText, CheckCircle, XCircle, Clock, Loader, AlertTriangle } from 'lucide-react'
 import { MarkdownContent } from '@/components/MarkdownContent'
@@ -22,7 +22,7 @@ export default async function DashboardPage() {
       <div>
         <div className="page-header">
           <h1>总览</h1>
-          <p>后端服务未响应，请检查 http://localhost:8000 是否正常运行。</p>
+          <p>后端服务未响应，请检查 API 服务是否正常运行：{publicBase}</p>
         </div>
       </div>
     )
