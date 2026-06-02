@@ -27,6 +27,16 @@ class ProjectOut(BaseModel):
     queries: list[str] = []
 
 
+class WatchlistImport(BaseModel):
+    projects: list[ProjectIn]
+
+
+class WatchlistImportResult(BaseModel):
+    imported: int
+    created: int
+    updated: int
+
+
 class EventOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 

@@ -8,7 +8,17 @@ from app.bootstrap import seed_defaults
 from app.db import get_db, init_db
 from app.models import Event, JobRun, Project, Report, SearchQuery
 from app.processors.github_radar import build_project_radar
-from app.schemas import EventOut, EventPatch, JobRunOut, ProjectIn, ProjectOut, ProjectRadarOut, ReportOut
+from app.schemas import (
+    EventOut,
+    EventPatch,
+    JobRunOut,
+    ProjectIn,
+    ProjectOut,
+    ProjectRadarOut,
+    ReportOut,
+    WatchlistImport,
+    WatchlistImportResult,
+)
 from app.services import build_report_context, generate_daily_report, run_collection_job, start_collection_job
 from app.settings import settings
 from app.worker import daily_run
@@ -85,6 +95,42 @@ def list_projects(db: Session = Depends(get_db)) -> list[ProjectOut]:
     for project in projects:
         result.append(_project_out(project))
     return result
+
+
+@app.get("/api/watchlist/export")
+def export_watchlist(db: Session = Depends(get_db)) -> dict:
+    projects = db.query(Project).order_by(Project.priority.desc(), Project.name).all()
+    return {
+        "version": 1,
+        "projects": [_project_out(project).model_dump(mode="json", exclude={"id", "created_at"}) for project in projects],
+    }
+
+
+@app.post("/api/watchlist/import", response_model=WatchlistImportResult)
+def import_watchlist(payload: WatchlistImport, db: Session = Depends(get_db)) -> WatchlistImportResult:
+    created = 0
+    updated = 0
+    for item in payload.projects:
+        project = db.query(Project).filter(Project.name == item.name).first()
+        if project:
+            updated += 1
+        else:
+            project = Project(name=item.name)
+            db.add(project)
+            db.flush()
+            created += 1
+
+        project.type = item.type
+        project.github_repo = item.github_repo
+        project.homepage_url = item.homepage_url
+        project.enabled = item.enabled
+        project.priority = item.priority
+        db.query(SearchQuery).filter(SearchQuery.project_id == project.id).delete()
+        for query in item.queries:
+            db.add(SearchQuery(project_id=project.id, query=query))
+
+    db.commit()
+    return WatchlistImportResult(imported=len(payload.projects), created=created, updated=updated)
 
 
 @app.post("/api/watchlist/projects", response_model=ProjectOut)

@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useCallback } from 'react'
-import { Plus, Edit2, Trash2, ExternalLink, X } from 'lucide-react'
+import { Plus, Edit2, Trash2, ExternalLink, X, Download, Upload } from 'lucide-react'
 import { publicBase, apiPost, apiPatch, apiDelete } from '@/lib/api'
 import { Toast } from '../components/Toast'
 
@@ -71,6 +71,46 @@ export default function WatchlistPage() {
     } catch { setToast({ message: '删除失败', type: 'error' }) }
   }
 
+  const handleExport = async () => {
+    try {
+      const res = await fetch(`${publicBase}/api/watchlist/export`)
+      if (!res.ok) throw new Error('export failed')
+      const data = await res.json()
+      const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' })
+      const url = URL.createObjectURL(blob)
+      const link = document.createElement('a')
+      link.href = url
+      link.download = `memory-watchlist-${new Date().toISOString().slice(0, 10)}.json`
+      document.body.appendChild(link)
+      link.click()
+      link.remove()
+      URL.revokeObjectURL(url)
+      setToast({ message: '追踪列表已导出', type: 'success' })
+    } catch {
+      setToast({ message: '导出失败', type: 'error' })
+    }
+  }
+
+  const handleImport = async (file: File | null) => {
+    if (!file) return
+    try {
+      const text = await file.text()
+      const data = JSON.parse(text)
+      const payload = Array.isArray(data) ? { projects: data } : data
+      const res = await fetch(`${publicBase}/api/watchlist/import`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(payload),
+      })
+      if (!res.ok) throw new Error('import failed')
+      const result = await res.json()
+      setToast({ message: `导入完成：新增 ${result.created}，更新 ${result.updated}`, type: 'success' })
+      fetchProjects()
+    } catch {
+      setToast({ message: '导入失败，请检查 JSON 文件格式', type: 'error' })
+    }
+  }
+
   const typeBadge = (t: string) => {
     if (t === 'open_source') return 'badge--blue'
     if (t === 'commercial') return 'badge--purple'
@@ -79,9 +119,16 @@ export default function WatchlistPage() {
 
   return (
     <div>
-      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start' }}>
+      <div className="page-header" style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 12 }}>
         <div><h1>追踪列表</h1><p>管理需要追踪的 Agent Memory 项目与搜索词</p></div>
-        <button className="btn btn-primary" onClick={openAdd}><Plus size={16} /> 添加项目</button>
+        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
+          <button className="btn btn-secondary" onClick={handleExport}><Download size={16} /> 导出 JSON</button>
+          <label className="btn btn-secondary" style={{ cursor: 'pointer' }}>
+            <Upload size={16} /> 导入 JSON
+            <input type="file" accept="application/json,.json" style={{ display: 'none' }} onChange={e => { handleImport(e.target.files?.[0] || null); e.currentTarget.value = '' }} />
+          </label>
+          <button className="btn btn-primary" onClick={openAdd}><Plus size={16} /> 添加项目</button>
+        </div>
       </div>
 
       {loading ? (
