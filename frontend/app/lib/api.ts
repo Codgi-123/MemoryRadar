@@ -84,7 +84,7 @@ export function formatDateTime(dateStr: string): string {
   return d.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
 
-export function relativeTime(dateStr: string): string {
+export function formatRelativeTime(dateStr: string): string {
   const now = Date.now()
   const then = new Date(dateStr).getTime()
   const diff = now - then
@@ -96,3 +96,5 @@ export function relativeTime(dateStr: string): string {
   const days = Math.floor(hours / 24)
   return `${days} 天前`
 }
+
+export const relativeTime = formatRelativeTime
