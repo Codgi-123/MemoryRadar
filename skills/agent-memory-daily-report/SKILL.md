@@ -12,17 +12,17 @@ Use this skill to retrieve generated Agent Memory market daily reports and push 
 One-line install (auto-detects platform):
 
 ```bash
-curl -fsSL {{BASE_URL}}/agent-memory-daily-report/install.sh | bash
+curl -fsSL {{BASE_URL}}/api/skill/install.sh | bash
 ```
 
 Other Agent platforms:
 
 ```bash
 # Codex CLI
-SKILL_DIR=$HOME/.codex/skills/agent-memory-daily-report bash <(curl -fsSL {{BASE_URL}}/agent-memory-daily-report/install.sh)
+SKILL_DIR=$HOME/.codex/skills/agent-memory-daily-report bash <(curl -fsSL {{BASE_URL}}/api/skill/install.sh)
 
 # Gemini CLI
-SKILL_DIR=$HOME/.gemini/skills/agent-memory-daily-report bash <(curl -fsSL {{BASE_URL}}/agent-memory-daily-report/install.sh)
+SKILL_DIR=$HOME/.gemini/skills/agent-memory-daily-report bash <(curl -fsSL {{BASE_URL}}/api/skill/install.sh)
 ```
 
 The install script will:
