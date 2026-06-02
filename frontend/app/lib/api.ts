@@ -3,20 +3,45 @@ function normalizeApiBase(value: string | undefined) {
   if (raw && raw !== 'undefined' && raw !== 'null') {
     return raw.replace(/\/$/, '')
   }
-  if (typeof window !== 'undefined') {
-    return `${window.location.protocol}//${window.location.hostname}:8000`
-  }
-  return 'http://localhost:8000'
+  return ''
 }
 
-const PUBLIC_API_BASE = normalizeApiBase(process.env.NEXT_PUBLIC_API_URL)
-
-function apiBase() {
-  if (typeof window === 'undefined') {
-    return normalizeApiBase(process.env.API_INTERNAL_URL || process.env.INTERNAL_API_BASE_URL || PUBLIC_API_BASE)
-  }
-  return PUBLIC_API_BASE
+function isLoopbackHost(hostname: string) {
+  return ['localhost', '127.0.0.1', '::1'].includes(hostname)
 }
+
+function browserApiBase() {
+  const configured = normalizeApiBase(process.env.NEXT_PUBLIC_API_URL)
+  if (!configured) return ''
+
+  try {
+    const configuredUrl = new URL(configured)
+    const pageHost = window.location.hostname
+    if (isLoopbackHost(configuredUrl.hostname) && !isLoopbackHost(pageHost)) {
+      return ''
+    }
+  } catch {
+    return ''
+  }
+
+  return configured
+}
+
+function serverApiBase() {
+  return (
+    normalizeApiBase(process.env.API_INTERNAL_URL) ||
+    normalizeApiBase(process.env.INTERNAL_API_BASE_URL) ||
+    normalizeApiBase(process.env.NEXT_PUBLIC_API_URL) ||
+    'http://localhost:8000'
+  )
+}
+
+export function apiBase() {
+  if (typeof window === 'undefined') return serverApiBase()
+  return browserApiBase()
+}
+
+export const publicBase = ''
 
 export async function apiGet<T>(path: string): Promise<T> {
   const res = await fetch(`${apiBase()}${path}`, { cache: 'no-store' })
