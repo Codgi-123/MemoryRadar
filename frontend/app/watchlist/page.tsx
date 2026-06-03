@@ -18,6 +18,20 @@ interface ProjectForm {
 
 const emptyForm: ProjectForm = { name: '', type: 'open_source', github_repo: '', homepage_url: '', enabled: true, priority: 5, queries: [] }
 
+function normalizeOptional(value: string) {
+  const trimmed = value.trim()
+  return trimmed.length > 0 ? trimmed : null
+}
+
+function normalizeGitHubRepo(value: string) {
+  const trimmed = value.trim().replace(/^https?:\/\/github\.com\//, '').replace(/^github\.com\//, '')
+  return trimmed.replace(/\.git$/, '').replace(/^\/+|\/+$/g, '')
+}
+
+function parseQueries(value: string) {
+  return Array.from(new Set(value.split(',').map(q => q.trim()).filter(Boolean)))
+}
+
 export default function WatchlistPage() {
   const [projects, setProjects] = useState<Project[]>([])
   const [loading, setLoading] = useState(true)
@@ -39,7 +53,7 @@ export default function WatchlistPage() {
 
   useEffect(() => { fetchProjects() }, [fetchProjects])
 
-  const openAdd = () => { setEditingId(null); setForm(emptyForm); setQueryInput(''); setShowModal(true) }
+  const openAdd = () => { setEditingId(null); setForm({ ...emptyForm, queries: [] }); setQueryInput(''); setShowModal(true) }
   const openEdit = (p: Project) => {
     setEditingId(p.id)
     setForm({ name: p.name, type: p.type, github_repo: p.github_repo || '', homepage_url: p.homepage_url || '', enabled: p.enabled, priority: p.priority, queries: p.queries })
@@ -48,7 +62,18 @@ export default function WatchlistPage() {
   }
 
   const handleSave = async () => {
-    const payload = { ...form, queries: queryInput.split(',').map(q => q.trim()).filter(Boolean) }
+    const payload = {
+      ...form,
+      name: form.name.trim(),
+      github_repo: normalizeOptional(normalizeGitHubRepo(form.github_repo)),
+      homepage_url: normalizeOptional(form.homepage_url),
+      priority: Math.min(10, Math.max(1, form.priority || 1)),
+      queries: parseQueries(queryInput),
+    }
+    if (!payload.name) {
+      setToast({ message: '项目名称不能为空', type: 'error' })
+      return
+    }
     try {
       if (editingId) {
         await apiPatch(`/api/watchlist/projects/${editingId}`, payload)
@@ -207,7 +232,7 @@ export default function WatchlistPage() {
             </div>
             <div className="modal-actions">
               <button className="btn btn-secondary" onClick={() => setShowModal(false)}>取消</button>
-              <button className="btn btn-primary" onClick={handleSave} disabled={!form.name}>{editingId ? '保存' : '添加'}</button>
+              <button className="btn btn-primary" onClick={handleSave} disabled={!form.name.trim()}>{editingId ? '保存' : '添加'}</button>
             </div>
           </div>
         </div>
