@@ -1,4 +1,6 @@
+import asyncio
 from datetime import date, datetime, timedelta, timezone
+from typing import Any
 
 import httpx
 from sqlalchemy.exc import IntegrityError
@@ -6,6 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.models import GithubProjectSnapshot, Project
 from app.settings import settings
+from app.time_utils import app_today
 
 SEVERE_KEYWORDS = [
     "data loss",
@@ -36,15 +39,18 @@ SEVERE_KEYWORDS = [
 
 
 async def collect_github_project_snapshot(project: Project, target_date: date | None = None) -> dict:
-    target_date = target_date or date.today()
-    since = datetime.combine(target_date - timedelta(days=1), datetime.min.time(), tzinfo=timezone.utc)
-    repo = project.github_repo or ""
+    target_date = target_date or app_today()
+    repo = (project.github_repo or "").strip()
+    if not repo:
+        raise ValueError(f"Project {project.name} does not have a GitHub repo configured")
+
+    since = _since_start(target_date)
     headers = {"Accept": "application/vnd.github+json"}
     if settings.github_token:
         headers["Authorization"] = f"Bearer {settings.github_token}"
 
     async with httpx.AsyncClient(timeout=30, headers=headers) as client:
-        repo_resp, releases_resp, issues_resp, commits_resp = await asyncio_gather_compat(
+        repo_resp, releases_resp, issues_resp, commits_resp = await asyncio.gather(
             client.get(f"https://api.github.com/repos/{repo}"),
             client.get(f"https://api.github.com/repos/{repo}/releases", params={"per_page": 10}),
             client.get(
@@ -58,19 +64,19 @@ async def collect_github_project_snapshot(project: Project, target_date: date | 
         raise RuntimeError(f"GitHub repo fetch failed for {repo}: HTTP {repo_resp.status_code}")
 
     repo_data = repo_resp.json()
-    releases = releases_resp.json() if releases_resp.status_code == 200 else []
-    issues_payload = issues_resp.json() if issues_resp.status_code == 200 else []
-    commits = commits_resp.json() if commits_resp.status_code == 200 else []
+    releases = _json_list(releases_resp)
+    issues_payload = _json_list(issues_resp)
+    commits = _json_list(commits_resp)
 
     issues = [item for item in issues_payload if "pull_request" not in item]
     prs = [item for item in issues_payload if "pull_request" in item]
-    new_issues = [item for item in issues if _dt(item.get("created_at")) and _dt(item.get("created_at")) >= since]
-    closed_issues = [item for item in issues if item.get("state") == "closed" and _dt(item.get("closed_at")) and _dt(item.get("closed_at")) >= since]
-    new_prs = [item for item in prs if _dt(item.get("created_at")) and _dt(item.get("created_at")) >= since]
-    closed_prs = [item for item in prs if item.get("state") == "closed" and _dt(item.get("closed_at")) and _dt(item.get("closed_at")) >= since]
-    new_releases = [item for item in releases if _dt(item.get("published_at")) and _dt(item.get("published_at")) >= since]
-    changed_issues = {item.get("id"): item for item in [*new_issues, *closed_issues]}.values()
-    severe_issues = [item for item in changed_issues if _is_severe_issue(item)]
+    new_issues = _changed_since(issues, "created_at", since)
+    closed_issues = [item for item in issues if item.get("state") == "closed" and _is_at_or_after(item.get("closed_at"), since)]
+    updated_issues = _changed_since(issues, "updated_at", since)
+    new_prs = _changed_since(prs, "created_at", since)
+    closed_prs = [item for item in prs if item.get("state") == "closed" and _is_at_or_after(item.get("closed_at"), since)]
+    new_releases = _changed_since(releases, "published_at", since)
+    severe_issues = [item for item in _dedupe_by_id([*new_issues, *closed_issues, *updated_issues]) if _is_severe_issue(item)]
     latest_release = releases[0] if releases else None
 
     return {
@@ -96,12 +102,6 @@ async def collect_github_project_snapshot(project: Project, target_date: date | 
     }
 
 
-async def asyncio_gather_compat(*aws):
-    import asyncio
-
-    return await asyncio.gather(*aws)
-
-
 def store_github_snapshot(db: Session, snapshot: dict) -> None:
     existing = (
         db.query(GithubProjectSnapshot)
@@ -123,49 +123,73 @@ def store_github_snapshot(db: Session, snapshot: dict) -> None:
 
 
 def build_project_radar(db: Session, target_date: date | None = None) -> list[dict]:
-    target_date = target_date or date.today()
+    target_date = target_date or app_today()
     snapshots = (
         db.query(GithubProjectSnapshot)
         .filter(GithubProjectSnapshot.snapshot_date == target_date)
         .order_by(GithubProjectSnapshot.project_name)
         .all()
     )
-    radar = []
-    for snapshot in snapshots:
-        previous = (
-            db.query(GithubProjectSnapshot)
-            .filter(
-                GithubProjectSnapshot.project_id == snapshot.project_id,
-                GithubProjectSnapshot.snapshot_date < target_date,
-            )
-            .order_by(GithubProjectSnapshot.snapshot_date.desc())
-            .first()
+    return [_radar_entry(db, snapshot, target_date) for snapshot in snapshots]
+
+
+def _radar_entry(db: Session, snapshot: GithubProjectSnapshot, target_date: date) -> dict:
+    previous = (
+        db.query(GithubProjectSnapshot)
+        .filter(
+            GithubProjectSnapshot.project_id == snapshot.project_id,
+            GithubProjectSnapshot.snapshot_date < target_date,
         )
-        star_delta = snapshot.stars - previous.stars if previous else None
-        open_issue_delta = snapshot.open_issues_count - previous.open_issues_count if previous else None
-        radar.append(
-            {
-                "project": snapshot.project_name,
-                "github_repo": snapshot.github_repo,
-                "stars": snapshot.stars,
-                "star_delta": star_delta,
-                "forks": snapshot.forks,
-                "open_issues_count": snapshot.open_issues_count,
-                "open_issue_delta": open_issue_delta,
-                "recent_commit_count": snapshot.recent_commit_count,
-                "new_release_count": snapshot.new_release_count,
-                "latest_release_tag": snapshot.latest_release_tag,
-                "latest_release_url": snapshot.latest_release_url,
-                "new_issue_count": snapshot.new_issue_count,
-                "closed_issue_count": snapshot.closed_issue_count,
-                "new_pr_count": snapshot.new_pr_count,
-                "closed_pr_count": snapshot.closed_pr_count,
-                "severe_issue_count": snapshot.severe_issue_count,
-                "severe_issue_summary": snapshot.severe_issue_summary,
-                "pushed_at": snapshot.pushed_at.isoformat() if snapshot.pushed_at else None,
-            }
-        )
-    return radar
+        .order_by(GithubProjectSnapshot.snapshot_date.desc())
+        .first()
+    )
+    return {
+        "project": snapshot.project_name,
+        "github_repo": snapshot.github_repo,
+        "stars": snapshot.stars,
+        "star_delta": snapshot.stars - previous.stars if previous else None,
+        "forks": snapshot.forks,
+        "open_issues_count": snapshot.open_issues_count,
+        "open_issue_delta": snapshot.open_issues_count - previous.open_issues_count if previous else None,
+        "recent_commit_count": snapshot.recent_commit_count,
+        "new_release_count": snapshot.new_release_count,
+        "latest_release_tag": snapshot.latest_release_tag,
+        "latest_release_url": snapshot.latest_release_url,
+        "new_issue_count": snapshot.new_issue_count,
+        "closed_issue_count": snapshot.closed_issue_count,
+        "new_pr_count": snapshot.new_pr_count,
+        "closed_pr_count": snapshot.closed_pr_count,
+        "severe_issue_count": snapshot.severe_issue_count,
+        "severe_issue_summary": snapshot.severe_issue_summary,
+        "pushed_at": snapshot.pushed_at.isoformat() if snapshot.pushed_at else None,
+    }
+
+
+def _json_list(response: httpx.Response) -> list[dict[str, Any]]:
+    if response.status_code != 200:
+        return []
+    payload = response.json()
+    return payload if isinstance(payload, list) else []
+
+
+def _since_start(target_date: date) -> datetime:
+    return datetime.combine(target_date - timedelta(days=1), datetime.min.time(), tzinfo=timezone.utc)
+
+
+def _changed_since(items: list[dict], field: str, since: datetime) -> list[dict]:
+    return [item for item in items if _is_at_or_after(item.get(field), since)]
+
+
+def _is_at_or_after(value: str | None, threshold: datetime) -> bool:
+    parsed = _dt(value)
+    return bool(parsed and parsed >= threshold)
+
+
+def _dedupe_by_id(items: list[dict]) -> list[dict]:
+    by_id = {}
+    for item in items:
+        by_id[item.get("id") or item.get("html_url") or id(item)] = item
+    return list(by_id.values())
 
 
 def _is_severe_issue(issue: dict) -> bool:
@@ -177,10 +201,7 @@ def _is_severe_issue(issue: dict) -> bool:
 def _issue_summary(issues: list[dict]) -> str | None:
     if not issues:
         return None
-    lines = []
-    for issue in issues:
-        lines.append(f"#{issue.get('number')} {issue.get('title')} ({issue.get('html_url')})")
-    return "\n".join(lines)
+    return "\n".join(f"#{issue.get('number')} {issue.get('title')} ({issue.get('html_url')})" for issue in issues)
 
 
 def _dt(value: str | None) -> datetime | None:

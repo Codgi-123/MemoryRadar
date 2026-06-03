@@ -8,7 +8,7 @@ from sqlalchemy.orm import Session
 
 from app.bootstrap import seed_defaults
 from app.db import get_db, init_db
-from app.models import Event, JobRun, Project, Report, SearchQuery
+from app.models import Event, EventStatus, JobRun, Project, Report, SearchQuery
 from app.processors.github_radar import build_project_radar
 from app.schemas import (
     EventOut,
@@ -23,6 +23,7 @@ from app.schemas import (
 )
 from app.services import build_report_context, generate_daily_report, generate_weekly_report, run_collection_job, start_collection_job
 from app.settings import settings
+from app.time_utils import app_today
 from app.worker import daily_run, weekly_run
 
 app = FastAPI(title="Memory Market Watcher")
@@ -82,7 +83,7 @@ def dashboard(db: Session = Depends(get_db)) -> dict:
     latest_report = db.query(Report).order_by(Report.report_date.desc()).first()
     return {
         "projects": db.query(Project).count(),
-        "events_today": db.query(Event).filter(Event.event_date == date.today()).count(),
+        "events_today": db.query(Event).filter(Event.event_date == app_today()).count(),
         "important_events": db.query(Event).filter(Event.status == "important").count(),
         "reports": db.query(Report).count(),
         "report_context": build_report_context(db),
@@ -125,15 +126,7 @@ def import_watchlist(payload: WatchlistImport, db: Session = Depends(get_db)) ->
             db.add(project)
             db.flush()
             created += 1
-
-        project.type = item.type
-        project.github_repo = item.github_repo
-        project.homepage_url = item.homepage_url
-        project.enabled = item.enabled
-        project.priority = item.priority
-        db.query(SearchQuery).filter(SearchQuery.project_id == project.id).delete()
-        for query in item.queries:
-            db.add(SearchQuery(project_id=project.id, query=query))
+        _apply_project_payload(db, project, item)
 
     db.commit()
     return WatchlistImportResult(imported=len(payload.projects), created=created, updated=updated)
@@ -141,18 +134,10 @@ def import_watchlist(payload: WatchlistImport, db: Session = Depends(get_db)) ->
 
 @app.post("/api/watchlist/projects", response_model=ProjectOut)
 def create_project(payload: ProjectIn, db: Session = Depends(get_db)) -> ProjectOut:
-    project = Project(
-        name=payload.name,
-        type=payload.type,
-        github_repo=payload.github_repo,
-        homepage_url=payload.homepage_url,
-        enabled=payload.enabled,
-        priority=payload.priority,
-    )
+    project = Project(name=payload.name)
     db.add(project)
     db.flush()
-    for query in payload.queries:
-        db.add(SearchQuery(project_id=project.id, query=query))
+    _apply_project_payload(db, project, payload)
     db.commit()
     db.refresh(project)
     return _project_out(project)
@@ -163,15 +148,7 @@ def update_project(project_id: int, payload: ProjectIn, db: Session = Depends(ge
     project = db.get(Project, project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
-    project.name = payload.name
-    project.type = payload.type
-    project.github_repo = payload.github_repo
-    project.homepage_url = payload.homepage_url
-    project.enabled = payload.enabled
-    project.priority = payload.priority
-    db.query(SearchQuery).filter(SearchQuery.project_id == project.id).delete()
-    for query in payload.queries:
-        db.add(SearchQuery(project_id=project.id, query=query))
+    _apply_project_payload(db, project, payload)
     db.commit()
     db.refresh(project)
     return _project_out(project)
@@ -212,6 +189,8 @@ def patch_event(event_id: int, payload: EventPatch, db: Session = Depends(get_db
     event = db.get(Event, event_id)
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
+    if payload.status not in {status.value for status in EventStatus}:
+        raise HTTPException(status_code=400, detail="Invalid event status")
     event.status = payload.status
     db.commit()
     db.refresh(event)
@@ -289,6 +268,23 @@ def backfill_now(background_tasks: BackgroundTasks, db: Session = Depends(get_db
     job_id = start_collection_job(db, job_type="backfill")
     background_tasks.add_task(run_collection_job, job_id, 7)
     return {"job_id": job_id, "status": "queued", "days": 7}
+
+
+def _apply_project_payload(db: Session, project: Project, payload: ProjectIn) -> None:
+    project.name = payload.name
+    project.type = payload.type
+    project.github_repo = payload.github_repo
+    project.homepage_url = payload.homepage_url
+    project.enabled = payload.enabled
+    project.priority = payload.priority
+    db.query(SearchQuery).filter(SearchQuery.project_id == project.id).delete()
+    seen_queries = set()
+    for query in payload.queries:
+        normalized = query.strip()
+        if not normalized or normalized in seen_queries:
+            continue
+        seen_queries.add(normalized)
+        db.add(SearchQuery(project_id=project.id, query=normalized))
 
 
 def _project_out(project: Project) -> ProjectOut:
