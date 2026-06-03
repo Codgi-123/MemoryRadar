@@ -17,6 +17,20 @@ async def summarize_daily(
     return _fallback_summary(events), "fallback-no-llm"
 
 
+async def summarize_weekly(
+    daily_reports: list[dict],
+    weekly_events: list[dict],
+    project_radar: list[dict] | None = None,
+    report_context: dict | None = None,
+) -> tuple[str, str]:
+    prompt = _build_weekly_prompt(daily_reports, weekly_events, project_radar or [], report_context or {})
+    if settings.llm_provider == "anthropic" and settings.anthropic_api_key:
+        return await _anthropic(prompt, marker="# Agent Memory 市场周报")
+    if settings.openai_api_key:
+        return await _openai(prompt, marker="# Agent Memory 市场周报")
+    return _fallback_weekly_summary(daily_reports, weekly_events), "fallback-no-llm"
+
+
 def _build_prompt(events: list[dict], previous_report: str | None, project_radar: list[dict], report_context: dict) -> str:
     return f"""
 你是 Agent Memory 市场分析师和日报编辑。请用中文生成一份高信号、克制、可快速阅读的每日市场简报，重点说明“相对昨天新增了什么”。
@@ -88,7 +102,60 @@ GitHub 项目雷达数据：
 """.strip()
 
 
-async def _openai(prompt: str) -> tuple[str, str]:
+def _build_weekly_prompt(daily_reports: list[dict], weekly_events: list[dict], project_radar: list[dict], report_context: dict) -> str:
+    return f"""
+你是 Agent Memory 市场分析师。请基于最近 7 天日报和结构化事件，生成一份“周报”，重点提取观察产品/开源项目的核心版本更新或功能更新。
+
+写作要求：
+- 只输出 Markdown 周报正文，第一行必须是“# Agent Memory 市场周报”；不要输出寒暄、解释、确认语或元说明。
+- 周报不是日报拼接，必须做归纳、去重和趋势判断。
+- 重点关注观察产品/项目的核心版本更新、功能更新、重要 issue 修复、能力边界变化。
+- 每条核心更新必须尽量体现：发布时间、进展简述、能力分析。
+- 如果不能确认发布时间，写“发布时间：未明确”，不要编造。
+- 报告中提到的 Release、Issue、PR、文章、项目必须尽量使用 Markdown 链接 `[标题](URL)`。
+- 不要把冷启动或基线期首次观察误写成“本周发布”；证据不足时写“本周观察到”。
+- 输出中文 Markdown。
+
+输出结构：
+# Agent Memory 市场周报
+
+## 1. 本周总结
+用 3-5 条 bullet 总结本周最值得关注的变化和结论。
+
+## 2. 核心版本 / 功能更新
+用 Markdown 表格，字段必须包含：
+| 产品 / 项目 | 发布时间 | 进展简述 | 能力分析 | 原链接 |
+
+只放确实与 Agent Memory、AI Agent 长期记忆、记忆框架、记忆安全、记忆数据库相关的内容。
+
+## 3. 观察产品逐项分析
+按产品/项目逐一分析，至少覆盖近 7 天日报或事件中出现的重要观察对象。
+每个对象使用：
+### 产品 / 项目名
+- 发布时间：
+- 进展简述：
+- 能力分析：
+- 影响判断：
+- 后续观察点：
+
+## 4. 本周值得关注
+列出 3-6 条下周继续跟踪的方向、风险或机会。
+
+近 7 天日报：
+{daily_reports}
+
+近 7 天结构化事件：
+{weekly_events}
+
+GitHub 项目雷达数据：
+{project_radar}
+
+报告上下文：
+{report_context}
+""".strip()
+
+
+async def _openai(prompt: str, marker: str = "# Agent Memory 市场日报") -> tuple[str, str]:
     endpoint = _chat_completions_endpoint(settings.openai_base_url)
     async with httpx.AsyncClient(timeout=120) as client:
         response = await client.post(
@@ -103,7 +170,7 @@ async def _openai(prompt: str) -> tuple[str, str]:
         )
         response.raise_for_status()
         data = response.json()
-    return _normalize_report_markdown(data["choices"][0]["message"]["content"]), settings.openai_model
+    return _normalize_report_markdown(data["choices"][0]["message"]["content"], marker), settings.openai_model
 
 
 def _chat_completions_endpoint(base_url: str) -> str:
@@ -113,7 +180,7 @@ def _chat_completions_endpoint(base_url: str) -> str:
     return f"{base_url}/chat/completions"
 
 
-async def _anthropic(prompt: str) -> tuple[str, str]:
+async def _anthropic(prompt: str, marker: str = "# Agent Memory 市场日报") -> tuple[str, str]:
     endpoint = f"{settings.anthropic_base_url.rstrip('/')}/v1/messages"
     async with httpx.AsyncClient(timeout=120) as client:
         response = await client.post(
@@ -131,12 +198,11 @@ async def _anthropic(prompt: str) -> tuple[str, str]:
         )
         response.raise_for_status()
         data = response.json()
-    return _normalize_report_markdown(data["content"][0]["text"]), settings.anthropic_model
+    return _normalize_report_markdown(data["content"][0]["text"], marker), settings.anthropic_model
 
 
-def _normalize_report_markdown(content: str) -> str:
+def _normalize_report_markdown(content: str, marker: str = "# Agent Memory 市场日报") -> str:
     content = content.strip()
-    marker = "# Agent Memory 市场日报"
     marker_index = content.find(marker)
     if marker_index > 0:
         return content[marker_index:].strip()
@@ -179,4 +245,43 @@ def _fallback_summary(events: list[dict]) -> str:
     lines.extend(["", "## 4. 值得关注的内容"])
     for event in events[:8]:
         lines.append(f"- [{event['title']}]({event['url']})：{event['summary'][:160]}")
+    return "\n".join(lines)
+
+
+def _fallback_weekly_summary(daily_reports: list[dict], weekly_events: list[dict]) -> str:
+    lines = ["# Agent Memory 市场周报", "", "## 1. 本周总结"]
+    lines.append(f"- 本周可用日报 {len(daily_reports)} 份，结构化事件 {len(weekly_events)} 条。当前未配置 LLM key，因此先生成规则版周报。")
+    lines.extend(
+        [
+            "",
+            "## 2. 核心版本 / 功能更新",
+            "| 产品 / 项目 | 发布时间 | 进展简述 | 能力分析 | 原链接 |",
+            "|---|---|---|---|---|",
+        ]
+    )
+    update_events = [event for event in weekly_events if event.get("event_type") in {"release", "product_launch", "benchmark"}]
+    if update_events:
+        for event in update_events[:10]:
+            lines.append(
+                f"| {event.get('entity', '未知')} | {event.get('event_date', '未明确')} | {event.get('title', '')} | 待 LLM 深入分析 | [原链接]({event.get('url', '')}) |"
+            )
+    else:
+        lines.append("| 暂无明确核心更新 | 未明确 | 本周未识别到明确版本或功能更新 | 继续观察 | - |")
+
+    lines.extend(["", "## 3. 观察产品逐项分析"])
+    for entity in sorted({event.get("entity", "未知") for event in update_events})[:8]:
+        lines.extend(
+            [
+                "",
+                f"### {entity}",
+                "- 发布时间：待 LLM 分析。",
+                "- 进展简述：待 LLM 分析。",
+                "- 能力分析：待 LLM 分析。",
+                "- 影响判断：待 LLM 分析。",
+                "- 后续观察点：待 LLM 分析。",
+            ]
+        )
+    lines.extend(["", "## 4. 本周值得关注"])
+    for event in weekly_events[:6]:
+        lines.append(f"- [{event.get('title', '未命名事件')}]({event.get('url', '')})")
     return "\n".join(lines)

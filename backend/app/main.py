@@ -21,9 +21,9 @@ from app.schemas import (
     WatchlistImport,
     WatchlistImportResult,
 )
-from app.services import build_report_context, generate_daily_report, run_collection_job, start_collection_job
+from app.services import build_report_context, generate_daily_report, generate_weekly_report, run_collection_job, start_collection_job
 from app.settings import settings
-from app.worker import daily_run
+from app.worker import daily_run, weekly_run
 
 app = FastAPI(title="Memory Market Watcher")
 
@@ -64,6 +64,10 @@ def settings_status() -> dict:
         "anthropic_base_url": settings.anthropic_base_url,
         "llm_provider": settings.llm_provider,
         "daily_run_time": f"{settings.daily_run_cron_hour:02d}:{settings.daily_run_cron_minute:02d}",
+        "weekly_run_time": (
+            f"{settings.weekly_run_cron_day_of_week} "
+            f"{settings.weekly_run_cron_hour:02d}:{settings.weekly_run_cron_minute:02d}"
+        ),
         "timezone": settings.app_timezone,
     }
 
@@ -232,6 +236,30 @@ async def regenerate_report(target_date: date, db: Session = Depends(get_db)) ->
     return await generate_daily_report(db, target_date)
 
 
+@app.get("/api/reports/weekly", response_model=list[ReportOut])
+def list_weekly_reports(db: Session = Depends(get_db)) -> list[Report]:
+    return (
+        db.query(Report)
+        .filter(Report.report_type == "weekly")
+        .order_by(Report.report_date.desc())
+        .limit(30)
+        .all()
+    )
+
+
+@app.get("/api/reports/weekly/{target_date}", response_model=ReportOut)
+def get_weekly_report(target_date: date, db: Session = Depends(get_db)) -> Report:
+    report = db.query(Report).filter(Report.report_date == target_date, Report.report_type == "weekly").first()
+    if not report:
+        raise HTTPException(status_code=404, detail="Weekly report not found")
+    return report
+
+
+@app.post("/api/reports/weekly/{target_date}/regenerate", response_model=ReportOut)
+async def regenerate_weekly_report(target_date: date, db: Session = Depends(get_db)) -> Report:
+    return await generate_weekly_report(db, target_date)
+
+
 @app.get("/api/jobs", response_model=list[JobRunOut])
 def list_jobs(db: Session = Depends(get_db)) -> list[JobRun]:
     return db.query(JobRun).order_by(JobRun.started_at.desc()).limit(100).all()
@@ -240,6 +268,12 @@ def list_jobs(db: Session = Depends(get_db)) -> list[JobRun]:
 @app.post("/api/jobs/run-daily")
 def enqueue_daily() -> dict:
     task = daily_run.delay()
+    return {"task_id": task.id, "status": "queued"}
+
+
+@app.post("/api/jobs/run-weekly")
+def enqueue_weekly() -> dict:
+    task = weekly_run.delay()
     return {"task_id": task.id, "status": "queued"}
 
 

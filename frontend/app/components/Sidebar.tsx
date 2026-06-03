@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react'
 import Link from 'next/link'
 import { usePathname } from 'next/navigation'
-import { LayoutDashboard, Eye, Zap, Radio, FileText, Play, Settings, Puzzle, Menu, X } from 'lucide-react'
+import { LayoutDashboard, Eye, Zap, Radio, FileText, Play, Settings, Puzzle, Menu, X, CalendarDays } from 'lucide-react'
 
 const navItems = [
   { href: '/', label: '总览', icon: LayoutDashboard },
@@ -11,6 +11,7 @@ const navItems = [
   { href: '/events', label: '事件流', icon: Zap },
   { href: '/radar', label: '项目雷达', icon: Radio },
   { href: '/reports', label: '日报', icon: FileText },
+  { href: '/weekly', label: '周报', icon: CalendarDays },
   { href: '/jobs', label: '任务', icon: Play },
   { href: '/skills', label: 'Agent Skills', icon: Puzzle },
   { href: '/settings', label: '设置', icon: Settings },

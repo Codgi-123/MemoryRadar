@@ -15,6 +15,11 @@ NEXT_PUBLIC_API_URL=http://localhost:8000
 CORS_ORIGINS=http://localhost:3000,http://127.0.0.1:3000
 DATABASE_URL=sqlite:///./data/memory_market.db
 REDIS_URL=redis://redis:6379/0
+DAILY_RUN_CRON_HOUR=8
+DAILY_RUN_CRON_MINUTE=30
+WEEKLY_RUN_CRON_DAY_OF_WEEK=wednesday
+WEEKLY_RUN_CRON_HOUR=10
+WEEKLY_RUN_CRON_MINUTE=0
 ```
 
 For a server deployment, set `NEXT_PUBLIC_API_URL` to the browser-accessible API URL, and add the frontend domain to `CORS_ORIGINS`.
@@ -31,9 +36,9 @@ Services:
 - API: http://localhost:8000
 - Redis: internal only
 - Worker: Celery worker for background jobs
-- Scheduler: Celery beat for the daily run
+- Scheduler: Celery beat for the daily and weekly reports
 
-Only run one `scheduler` instance, otherwise the daily report may be triggered more than once.
+Only run one `scheduler` instance, otherwise scheduled reports may be triggered more than once.
 
 ## 3. Initialize Baseline
 
@@ -52,6 +57,14 @@ docker compose logs -f api
 docker compose logs -f worker
 docker compose logs -f scheduler
 docker compose logs -f frontend
+```
+
+Useful variants:
+
+```bash
+docker compose logs --tail=200 api
+docker compose logs --tail=200 worker scheduler
+docker compose ps
 ```
 
 ## 5. SQLite Backup

@@ -65,6 +65,9 @@ export default function JobsPage() {
         <button className="btn btn-secondary" disabled={!!acting} onClick={() => trigger('/api/jobs/run-daily', 'daily')}>
           <RefreshCw size={15} /> {acting === 'daily' ? '提交中...' : '生成每日日报'}
         </button>
+        <button className="btn btn-secondary" disabled={!!acting} onClick={() => trigger('/api/jobs/run-weekly', 'weekly')}>
+          <RefreshCw size={15} /> {acting === 'weekly' ? '提交中...' : '生成每周周报'}
+        </button>
         <button className="btn btn-secondary" disabled={!!acting} onClick={() => trigger('/api/jobs/backfill', 'backfill')}>
           <Database size={15} /> {acting === 'backfill' ? '提交中...' : '回填 7 天'}
         </button>

@@ -32,13 +32,35 @@ function inferApiBase() {
   }
 }
 
+function copyText(text: string): boolean {
+  if (navigator.clipboard && window.isSecureContext) {
+    navigator.clipboard.writeText(text)
+    return true
+  }
+  const textarea = document.createElement('textarea')
+  textarea.value = text
+  textarea.style.position = 'fixed'
+  textarea.style.opacity = '0'
+  document.body.appendChild(textarea)
+  textarea.select()
+  try {
+    document.execCommand('copy')
+    return true
+  } catch {
+    return false
+  } finally {
+    document.body.removeChild(textarea)
+  }
+}
+
 function CodeBlock({ value }: { value: string }) {
   const [copied, setCopied] = useState(false)
 
-  async function copy() {
-    await navigator.clipboard.writeText(value)
-    setCopied(true)
-    setTimeout(() => setCopied(false), 1200)
+  function copy() {
+    if (copyText(value)) {
+      setCopied(true)
+      setTimeout(() => setCopied(false), 1200)
+    }
   }
 
   return (

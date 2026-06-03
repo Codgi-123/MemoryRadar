@@ -6,7 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.collectors.github import collect_github_repo
 from app.collectors.serper_search import collect_serper_results
-from app.llm.provider import summarize_daily
+from app.llm.provider import summarize_daily, summarize_weekly
 from app.models import Event, GithubProjectSnapshot, JobRun, JobStatus, Project, Report, SearchQuery, SystemState
 from app.processors.events import create_events_from_raw, store_raw_items
 from app.processors.github_radar import build_project_radar, collect_github_project_snapshot, store_github_snapshot
@@ -162,6 +162,80 @@ async def generate_daily_report(db: Session, target_date: date | None = None) ->
     return db.query(Report).filter(Report.report_date == target_date, Report.report_type == "daily").one()
 
 
+async def generate_weekly_report(db: Session, target_date: date | None = None) -> Report:
+    target_date = target_date or date.today()
+    start_date = target_date - timedelta(days=6)
+    daily_reports = (
+        db.query(Report)
+        .filter(Report.report_type == "daily", Report.report_date >= start_date, Report.report_date <= target_date)
+        .order_by(Report.report_date.asc())
+        .all()
+    )
+    weekly_events = (
+        db.query(Event)
+        .filter(Event.event_date >= start_date, Event.event_date <= target_date)
+        .order_by(Event.event_date.desc(), Event.importance_score.desc(), Event.created_at.desc())
+        .limit(160)
+        .all()
+    )
+    daily_payload = [
+        {
+            "report_date": report.report_date.isoformat(),
+            "title": report.title,
+            "content_markdown": report.content_markdown[:12000],
+            "generated_by_model": report.generated_by_model,
+        }
+        for report in daily_reports
+    ]
+    event_payload = [
+        {
+            "entity": event.entity,
+            "event_type": event.event_type,
+            "title": event.title,
+            "summary": event.summary,
+            "url": event.url,
+            "source": event.source,
+            "event_date": event.event_date.isoformat(),
+            "importance_score": event.importance_score,
+            "novelty_score": event.novelty_score,
+            "date_confidence": event.date_confidence,
+            "is_baseline_event": event.is_baseline_event,
+            "is_market_latest": event.is_market_latest,
+            "evidence_reason": event.evidence_reason,
+        }
+        for event in weekly_events
+    ]
+    project_radar = build_project_radar(db, target_date)
+    report_context = build_report_context(db, target_date) | {
+        "report_type": "weekly",
+        "week_start_date": start_date.isoformat(),
+        "week_end_date": target_date.isoformat(),
+        "daily_report_count": len(daily_payload),
+        "weekly_event_count": len(event_payload),
+        "schedule": "每周三 10:00",
+    }
+    content, model = await summarize_weekly(daily_payload, event_payload, project_radar, report_context)
+    title = f"Agent Memory 市场周报 - {start_date.isoformat()} 至 {target_date.isoformat()}"
+
+    report = db.query(Report).filter(Report.report_date == target_date, Report.report_type == "weekly").first()
+    if report:
+        report.title = title
+        report.content_markdown = content
+        report.generated_by_model = model
+    else:
+        db.add(
+            Report(
+                report_date=target_date,
+                report_type="weekly",
+                title=title,
+                content_markdown=content,
+                generated_by_model=model,
+            )
+        )
+    db.commit()
+    return db.query(Report).filter(Report.report_date == target_date, Report.report_type == "weekly").one()
+
+
 def run_daily_job(db: Session) -> dict:
     job = JobRun(job_type="daily_run", status=JobStatus.running.value)
     db.add(job)
@@ -173,6 +247,24 @@ def run_daily_job(db: Session) -> dict:
         job.finished_at = datetime.utcnow()
         db.commit()
         return {"job_id": job.id, "collection": collection, "report_id": report.id}
+    except Exception as exc:
+        job.status = JobStatus.failed.value
+        job.error_message = str(exc)
+        job.finished_at = datetime.utcnow()
+        db.commit()
+        raise
+
+
+def run_weekly_job(db: Session) -> dict:
+    job = JobRun(job_type="weekly_run", status=JobStatus.running.value)
+    db.add(job)
+    db.commit()
+    try:
+        report = asyncio.run(generate_weekly_report(db))
+        job.status = JobStatus.success.value
+        job.finished_at = datetime.utcnow()
+        db.commit()
+        return {"job_id": job.id, "report_id": report.id}
     except Exception as exc:
         job.status = JobStatus.failed.value
         job.error_message = str(exc)

@@ -15,6 +15,9 @@ class Settings(BaseSettings):
     app_timezone: str = "Asia/Shanghai"
     daily_run_cron_hour: int = 8
     daily_run_cron_minute: int = 30
+    weekly_run_cron_day_of_week: str = "wednesday"
+    weekly_run_cron_hour: int = 10
+    weekly_run_cron_minute: int = 0
 
     serper_api_key: str | None = None
     serper_base_url: str = "https://google.serper.dev"
