@@ -5,6 +5,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.models import Event, RawItem
+from app.time_utils import app_today
 
 
 KEYWORDS = {
@@ -56,7 +57,7 @@ def create_events_from_raw(
     is_cold_start: bool = False,
     collection_days: int = 2,
 ) -> int:
-    target_date = target_date or date.today()
+    target_date = target_date or app_today()
     raw_items = db.query(RawItem).order_by(RawItem.fetched_at.desc()).limit(300).all()
     inserted = 0
     for raw in raw_items:
@@ -141,10 +142,18 @@ def _date_signal(raw: RawItem, target_date: date) -> dict:
             "confidence": "medium",
             "reason": "GitHub API item observed during the collection window.",
         }
+
+    first_seen = raw.first_seen_at or raw.fetched_at
+    if first_seen:
+        return {
+            "event_date": first_seen.date(),
+            "confidence": "low",
+            "reason": "No explicit publication date; using first-seen date instead of re-dating the item on every run.",
+        }
     return {
         "event_date": target_date,
         "confidence": "low",
-        "reason": "No explicit publication date; using collection date as first-seen date only.",
+        "reason": "No explicit publication or first-seen date; using collection date as a fallback.",
     }
 
 

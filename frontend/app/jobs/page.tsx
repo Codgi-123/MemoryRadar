@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Play, RefreshCw, Database, ChevronDown, ChevronRight } from 'lucide-react'
 import { apiGet, apiPost, formatDateTime } from '@/lib/api'
 
@@ -14,7 +14,6 @@ export default function JobsPage() {
   const [loading, setLoading] = useState(true)
   const [acting, setActing] = useState<string | null>(null)
   const [expandedErrors, setExpandedErrors] = useState<Set<number>>(new Set())
-  const intervalRef = useRef<NodeJS.Timeout | null>(null)
 
   const fetchJobs = useCallback(async () => {
     try {
@@ -24,16 +23,11 @@ export default function JobsPage() {
 
   useEffect(() => { fetchJobs() }, [fetchJobs])
 
-  // 自动轮询
+  // 有运行中任务时轮询；每次 effect 清理对应 interval，避免 ref 指向已清理定时器后停止轮询。
   useEffect(() => {
-    const hasRunning = jobs.some(j => j.status === 'running')
-    if (hasRunning && !intervalRef.current) {
-      intervalRef.current = setInterval(fetchJobs, 5000)
-    } else if (!hasRunning && intervalRef.current) {
-      clearInterval(intervalRef.current)
-      intervalRef.current = null
-    }
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current) }
+    if (!jobs.some(j => j.status === 'running')) return
+    const intervalId = window.setInterval(fetchJobs, 5000)
+    return () => window.clearInterval(intervalId)
   }, [jobs, fetchJobs])
 
   const trigger = async (endpoint: string, label: string) => {
