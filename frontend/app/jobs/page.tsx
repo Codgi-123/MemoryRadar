@@ -1,8 +1,9 @@
 'use client'
 
-import { useState, useEffect, useCallback, useRef } from 'react'
+import { useState, useEffect, useCallback } from 'react'
 import { Play, RefreshCw, Database, ChevronDown, ChevronRight } from 'lucide-react'
 import { apiGet, apiPost, formatDateTime } from '@/lib/api'
+import { AdminGate } from '../components/AdminGate'
 
 interface JobRunOut {
   id: number; job_type: string; status: string
@@ -14,7 +15,6 @@ export default function JobsPage() {
   const [loading, setLoading] = useState(true)
   const [acting, setActing] = useState<string | null>(null)
   const [expandedErrors, setExpandedErrors] = useState<Set<number>>(new Set())
-  const intervalRef = useRef<NodeJS.Timeout | null>(null)
 
   const fetchJobs = useCallback(async () => {
     try {
@@ -24,16 +24,11 @@ export default function JobsPage() {
 
   useEffect(() => { fetchJobs() }, [fetchJobs])
 
-  // 自动轮询
+  // 有运行中任务时轮询；每次 effect 清理对应 interval，避免 ref 指向已清理定时器后停止轮询。
   useEffect(() => {
-    const hasRunning = jobs.some(j => j.status === 'running')
-    if (hasRunning && !intervalRef.current) {
-      intervalRef.current = setInterval(fetchJobs, 5000)
-    } else if (!hasRunning && intervalRef.current) {
-      clearInterval(intervalRef.current)
-      intervalRef.current = null
-    }
-    return () => { if (intervalRef.current) clearInterval(intervalRef.current) }
+    if (!jobs.some(j => j.status === 'running')) return
+    const intervalId = window.setInterval(fetchJobs, 5000)
+    return () => window.clearInterval(intervalId)
   }, [jobs, fetchJobs])
 
   const trigger = async (endpoint: string, label: string) => {
@@ -58,20 +53,22 @@ export default function JobsPage() {
         <p>手动触发采集、日报生成等后台任务</p>
       </div>
 
-      <div style={{ display: 'flex', gap: 10, marginBottom: 28, flexWrap: 'wrap' }}>
-        <button className="btn btn-primary" disabled={!!acting} onClick={() => trigger('/api/jobs/collect', 'collect')}>
-          <Play size={15} /> {acting === 'collect' ? '提交中...' : '执行采集'}
-        </button>
-        <button className="btn btn-secondary" disabled={!!acting} onClick={() => trigger('/api/jobs/run-daily', 'daily')}>
-          <RefreshCw size={15} /> {acting === 'daily' ? '提交中...' : '生成每日日报'}
-        </button>
-        <button className="btn btn-secondary" disabled={!!acting} onClick={() => trigger('/api/jobs/run-weekly', 'weekly')}>
-          <RefreshCw size={15} /> {acting === 'weekly' ? '提交中...' : '生成每周周报'}
-        </button>
-        <button className="btn btn-secondary" disabled={!!acting} onClick={() => trigger('/api/jobs/backfill', 'backfill')}>
-          <Database size={15} /> {acting === 'backfill' ? '提交中...' : '回填 7 天'}
-        </button>
-      </div>
+      <AdminGate message="采集、回填和报告生成会消耗搜索 / GitHub / LLM 配额。">
+        <div style={{ display: 'flex', gap: 10, marginBottom: 28, flexWrap: 'wrap' }}>
+          <button className="btn btn-primary" disabled={!!acting} onClick={() => trigger('/api/jobs/collect', 'collect')}>
+            <Play size={15} /> {acting === 'collect' ? '提交中...' : '执行采集'}
+          </button>
+          <button className="btn btn-secondary" disabled={!!acting} onClick={() => trigger('/api/jobs/run-daily', 'daily')}>
+            <RefreshCw size={15} /> {acting === 'daily' ? '提交中...' : '生成每日日报'}
+          </button>
+          <button className="btn btn-secondary" disabled={!!acting} onClick={() => trigger('/api/jobs/run-weekly', 'weekly')}>
+            <RefreshCw size={15} /> {acting === 'weekly' ? '提交中...' : '生成每周周报'}
+          </button>
+          <button className="btn btn-secondary" disabled={!!acting} onClick={() => trigger('/api/jobs/backfill', 'backfill')}>
+            <Database size={15} /> {acting === 'backfill' ? '提交中...' : '回填 7 天'}
+          </button>
+        </div>
+      </AdminGate>
 
       {loading ? (
         <div className="skeleton" style={{ height: 300, borderRadius: 'var(--radius-lg)' }} />

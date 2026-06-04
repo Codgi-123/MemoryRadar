@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime, timezone
 
 import httpx
@@ -14,10 +15,11 @@ async def collect_github_repo(repo: str) -> list[dict]:
         headers["Authorization"] = f"Bearer {settings.github_token}"
 
     async with httpx.AsyncClient(timeout=30, headers=headers) as client:
-        release_req = client.get(f"https://api.github.com/repos/{repo}/releases", params={"per_page": 5})
-        commits_req = client.get(f"https://api.github.com/repos/{repo}/commits", params={"per_page": 5})
-        repo_req = client.get(f"https://api.github.com/repos/{repo}")
-        release_resp, commits_resp, repo_resp = await release_req, await commits_req, await repo_req
+        release_resp, commits_resp, repo_resp = await asyncio.gather(
+            client.get(f"https://api.github.com/repos/{repo}/releases", params={"per_page": 5}),
+            client.get(f"https://api.github.com/repos/{repo}/commits", params={"per_page": 5}),
+            client.get(f"https://api.github.com/repos/{repo}"),
+        )
 
     items: list[dict] = []
     fetched_at = datetime.now(timezone.utc)
