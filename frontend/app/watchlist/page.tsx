@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react'
 import { Plus, Edit2, Trash2, ExternalLink, X, Download, Upload } from 'lucide-react'
 import { apiGet, apiPost, apiPatch, apiDelete } from '@/lib/api'
 import { Toast } from '../components/Toast'
+import { AdminGate } from '../components/AdminGate'
 
 interface Project {
   id: number; name: string; type: string; github_repo: string | null
@@ -141,11 +142,13 @@ export default function WatchlistPage() {
         <div><h1>追踪列表</h1><p>管理需要追踪的 Agent Memory 项目与搜索词</p></div>
         <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap', justifyContent: 'flex-end' }}>
           <button className="btn btn-secondary" onClick={handleExport}><Download size={16} /> 导出 JSON</button>
-          <label className="btn btn-secondary" style={{ cursor: 'pointer' }}>
-            <Upload size={16} /> 导入 JSON
-            <input type="file" accept="application/json,.json" style={{ display: 'none' }} onChange={e => { handleImport(e.target.files?.[0] || null); e.currentTarget.value = '' }} />
-          </label>
-          <button className="btn btn-primary" onClick={openAdd}><Plus size={16} /> 添加项目</button>
+          <AdminGate message="新增、编辑、删除或导入追踪列表需要管理员口令。">
+            <label className="btn btn-secondary" style={{ cursor: 'pointer' }}>
+              <Upload size={16} /> 导入 JSON
+              <input type="file" accept="application/json,.json" style={{ display: 'none' }} onChange={e => { handleImport(e.target.files?.[0] || null); e.currentTarget.value = '' }} />
+            </label>
+            <button className="btn btn-primary" onClick={openAdd}><Plus size={16} /> 添加项目</button>
+          </AdminGate>
         </div>
       </div>
 
@@ -168,10 +171,12 @@ export default function WatchlistPage() {
                     {!p.enabled && <span className="badge badge--red">已禁用</span>}
                   </div>
                 </div>
-                <div style={{ display: 'flex', gap: 4 }}>
-                  <button className="btn btn-sm btn-secondary" onClick={() => openEdit(p)}><Edit2 size={14} /></button>
-                  <button className="btn btn-sm btn-danger" onClick={() => setDeleteId(p.id)}><Trash2 size={14} /></button>
-                </div>
+                <AdminGate message="编辑或删除追踪项目需要管理员口令。">
+                  <div style={{ display: 'flex', gap: 4 }}>
+                    <button className="btn btn-sm btn-secondary" onClick={() => openEdit(p)}><Edit2 size={14} /></button>
+                    <button className="btn btn-sm btn-danger" onClick={() => setDeleteId(p.id)}><Trash2 size={14} /></button>
+                  </div>
+                </AdminGate>
               </div>
               {p.github_repo && (
                 <a href={`https://github.com/${p.github_repo}`} target="_blank" rel="noopener" style={{ display: 'flex', alignItems: 'center', gap: 4, fontSize: '0.85rem', color: 'var(--accent)', marginBottom: 10 }}>

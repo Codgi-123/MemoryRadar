@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { Search, ExternalLink, ChevronLeft, ChevronRight } from 'lucide-react'
 import { apiGet, apiPatch, formatDate } from '@/lib/api'
+import { AdminGate } from '../components/AdminGate'
 
 interface EventOut {
   id: number; entity: string; event_type: string; title: string; summary: string
@@ -141,11 +142,13 @@ export default function EventsPage() {
                 <div className="event-card__summary">{ev.summary}</div>
                 <div className="event-card__actions">
                   <span className="text-muted text-sm">{formatDate(ev.event_date)} · {ev.date_confidence}</span>
-                  <div style={{ display: 'flex', gap: 4 }}>
-                    {STATUS_OPTIONS.map(status => (
-                      <button key={status.value} className={`btn btn-sm ${ev.status === status.value ? 'btn-primary' : 'btn-secondary'}`} onClick={() => updateStatus(ev.id, status.value)}>{status.label}</button>
-                    ))}
-                  </div>
+                  <AdminGate message="修改事件状态需要管理员口令。">
+                    <div style={{ display: 'flex', gap: 4 }}>
+                      {STATUS_OPTIONS.map(status => (
+                        <button key={status.value} className={`btn btn-sm ${ev.status === status.value ? 'btn-primary' : 'btn-secondary'}`} onClick={() => updateStatus(ev.id, status.value)}>{status.label}</button>
+                      ))}
+                    </div>
+                  </AdminGate>
                 </div>
               </div>
             </div>

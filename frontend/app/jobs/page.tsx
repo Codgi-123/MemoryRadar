@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback } from 'react'
 import { Play, RefreshCw, Database, ChevronDown, ChevronRight } from 'lucide-react'
 import { apiGet, apiPost, formatDateTime } from '@/lib/api'
+import { AdminGate } from '../components/AdminGate'
 
 interface JobRunOut {
   id: number; job_type: string; status: string
@@ -52,20 +53,22 @@ export default function JobsPage() {
         <p>手动触发采集、日报生成等后台任务</p>
       </div>
 
-      <div style={{ display: 'flex', gap: 10, marginBottom: 28, flexWrap: 'wrap' }}>
-        <button className="btn btn-primary" disabled={!!acting} onClick={() => trigger('/api/jobs/collect', 'collect')}>
-          <Play size={15} /> {acting === 'collect' ? '提交中...' : '执行采集'}
-        </button>
-        <button className="btn btn-secondary" disabled={!!acting} onClick={() => trigger('/api/jobs/run-daily', 'daily')}>
-          <RefreshCw size={15} /> {acting === 'daily' ? '提交中...' : '生成每日日报'}
-        </button>
-        <button className="btn btn-secondary" disabled={!!acting} onClick={() => trigger('/api/jobs/run-weekly', 'weekly')}>
-          <RefreshCw size={15} /> {acting === 'weekly' ? '提交中...' : '生成每周周报'}
-        </button>
-        <button className="btn btn-secondary" disabled={!!acting} onClick={() => trigger('/api/jobs/backfill', 'backfill')}>
-          <Database size={15} /> {acting === 'backfill' ? '提交中...' : '回填 7 天'}
-        </button>
-      </div>
+      <AdminGate message="采集、回填和报告生成会消耗搜索 / GitHub / LLM 配额。">
+        <div style={{ display: 'flex', gap: 10, marginBottom: 28, flexWrap: 'wrap' }}>
+          <button className="btn btn-primary" disabled={!!acting} onClick={() => trigger('/api/jobs/collect', 'collect')}>
+            <Play size={15} /> {acting === 'collect' ? '提交中...' : '执行采集'}
+          </button>
+          <button className="btn btn-secondary" disabled={!!acting} onClick={() => trigger('/api/jobs/run-daily', 'daily')}>
+            <RefreshCw size={15} /> {acting === 'daily' ? '提交中...' : '生成每日日报'}
+          </button>
+          <button className="btn btn-secondary" disabled={!!acting} onClick={() => trigger('/api/jobs/run-weekly', 'weekly')}>
+            <RefreshCw size={15} /> {acting === 'weekly' ? '提交中...' : '生成每周周报'}
+          </button>
+          <button className="btn btn-secondary" disabled={!!acting} onClick={() => trigger('/api/jobs/backfill', 'backfill')}>
+            <Database size={15} /> {acting === 'backfill' ? '提交中...' : '回填 7 天'}
+          </button>
+        </div>
+      </AdminGate>
 
       {loading ? (
         <div className="skeleton" style={{ height: 300, borderRadius: 'var(--radius-lg)' }} />

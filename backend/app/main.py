@@ -1,7 +1,9 @@
 from datetime import date
+from typing import Annotated
+import hmac
 from pathlib import Path
 
-from fastapi import BackgroundTasks, Depends, FastAPI, HTTPException, Query, Request
+from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
 from sqlalchemy.orm import Session
@@ -38,6 +40,13 @@ app.add_middleware(
 )
 
 
+def require_admin(x_admin_token: Annotated[str | None, Header(alias="X-Admin-Token")] = None) -> None:
+    if not settings.admin_token:
+        return
+    if not x_admin_token or not hmac.compare_digest(x_admin_token, settings.admin_token):
+        raise HTTPException(status_code=403, detail="Admin token required")
+
+
 @app.on_event("startup")
 def startup() -> None:
     init_db()
@@ -70,6 +79,7 @@ def settings_status() -> dict:
             f"{settings.weekly_run_cron_hour:02d}:{settings.weekly_run_cron_minute:02d}"
         ),
         "timezone": settings.app_timezone,
+        "admin_required": bool(settings.admin_token),
     }
 
 
@@ -114,7 +124,7 @@ def export_watchlist(db: Session = Depends(get_db)) -> dict:
 
 
 @app.post("/api/watchlist/import", response_model=WatchlistImportResult)
-def import_watchlist(payload: WatchlistImport, db: Session = Depends(get_db)) -> WatchlistImportResult:
+def import_watchlist(payload: WatchlistImport, _: None = Depends(require_admin), db: Session = Depends(get_db)) -> WatchlistImportResult:
     created = 0
     updated = 0
     for item in payload.projects:
@@ -133,7 +143,7 @@ def import_watchlist(payload: WatchlistImport, db: Session = Depends(get_db)) ->
 
 
 @app.post("/api/watchlist/projects", response_model=ProjectOut)
-def create_project(payload: ProjectIn, db: Session = Depends(get_db)) -> ProjectOut:
+def create_project(payload: ProjectIn, _: None = Depends(require_admin), db: Session = Depends(get_db)) -> ProjectOut:
     project = Project(name=payload.name)
     db.add(project)
     db.flush()
@@ -144,7 +154,7 @@ def create_project(payload: ProjectIn, db: Session = Depends(get_db)) -> Project
 
 
 @app.patch("/api/watchlist/projects/{project_id}", response_model=ProjectOut)
-def update_project(project_id: int, payload: ProjectIn, db: Session = Depends(get_db)) -> ProjectOut:
+def update_project(project_id: int, payload: ProjectIn, _: None = Depends(require_admin), db: Session = Depends(get_db)) -> ProjectOut:
     project = db.get(Project, project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
@@ -155,7 +165,7 @@ def update_project(project_id: int, payload: ProjectIn, db: Session = Depends(ge
 
 
 @app.delete("/api/watchlist/projects/{project_id}")
-def delete_project(project_id: int, db: Session = Depends(get_db)) -> dict:
+def delete_project(project_id: int, _: None = Depends(require_admin), db: Session = Depends(get_db)) -> dict:
     project = db.get(Project, project_id)
     if not project:
         raise HTTPException(status_code=404, detail="Project not found")
@@ -185,7 +195,7 @@ def project_radar(db: Session = Depends(get_db)) -> list[dict]:
 
 
 @app.patch("/api/events/{event_id}", response_model=EventOut)
-def patch_event(event_id: int, payload: EventPatch, db: Session = Depends(get_db)) -> Event:
+def patch_event(event_id: int, payload: EventPatch, _: None = Depends(require_admin), db: Session = Depends(get_db)) -> Event:
     event = db.get(Event, event_id)
     if not event:
         raise HTTPException(status_code=404, detail="Event not found")
@@ -211,7 +221,7 @@ def get_report(target_date: date, db: Session = Depends(get_db)) -> Report:
 
 
 @app.post("/api/reports/daily/{target_date}/regenerate", response_model=ReportOut)
-async def regenerate_report(target_date: date, db: Session = Depends(get_db)) -> Report:
+async def regenerate_report(target_date: date, _: None = Depends(require_admin), db: Session = Depends(get_db)) -> Report:
     return await generate_daily_report(db, target_date)
 
 
@@ -235,7 +245,7 @@ def get_weekly_report(target_date: date, db: Session = Depends(get_db)) -> Repor
 
 
 @app.post("/api/reports/weekly/{target_date}/regenerate", response_model=ReportOut)
-async def regenerate_weekly_report(target_date: date, db: Session = Depends(get_db)) -> Report:
+async def regenerate_weekly_report(target_date: date, _: None = Depends(require_admin), db: Session = Depends(get_db)) -> Report:
     return await generate_weekly_report(db, target_date)
 
 
@@ -245,26 +255,26 @@ def list_jobs(db: Session = Depends(get_db)) -> list[JobRun]:
 
 
 @app.post("/api/jobs/run-daily")
-def enqueue_daily() -> dict:
+def enqueue_daily(_: None = Depends(require_admin)) -> dict:
     task = daily_run.delay()
     return {"task_id": task.id, "status": "queued"}
 
 
 @app.post("/api/jobs/run-weekly")
-def enqueue_weekly() -> dict:
+def enqueue_weekly(_: None = Depends(require_admin)) -> dict:
     task = weekly_run.delay()
     return {"task_id": task.id, "status": "queued"}
 
 
 @app.post("/api/jobs/collect")
-def collect_now(background_tasks: BackgroundTasks, db: Session = Depends(get_db)) -> dict:
+def collect_now(background_tasks: BackgroundTasks, _: None = Depends(require_admin), db: Session = Depends(get_db)) -> dict:
     job_id = start_collection_job(db)
     background_tasks.add_task(run_collection_job, job_id)
     return {"job_id": job_id, "status": "queued"}
 
 
 @app.post("/api/jobs/backfill")
-def backfill_now(background_tasks: BackgroundTasks, db: Session = Depends(get_db)) -> dict:
+def backfill_now(background_tasks: BackgroundTasks, _: None = Depends(require_admin), db: Session = Depends(get_db)) -> dict:
     job_id = start_collection_job(db, job_type="backfill")
     background_tasks.add_task(run_collection_job, job_id, 7)
     return {"job_id": job_id, "status": "queued", "days": 7}

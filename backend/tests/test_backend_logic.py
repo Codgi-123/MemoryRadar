@@ -1,7 +1,11 @@
 from datetime import date, datetime
 import unittest
 
+from fastapi import HTTPException
+
+from app.main import require_admin
 from app.models import RawItem
+from app.settings import settings
 from app.processors.events import _date_signal
 from app.processors.github_radar import _changed_since, _since_start
 from app.schemas import ProjectIn
@@ -38,6 +42,18 @@ class BackendLogicTest(unittest.TestCase):
         ]
 
         self.assertEqual([item["id"] for item in _changed_since(items, "created_at", since)], [1])
+
+    def test_admin_guard_requires_matching_token_when_configured(self) -> None:
+        previous = settings.admin_token
+        settings.admin_token = "secret"
+        try:
+            with self.assertRaises(HTTPException):
+                require_admin()
+            with self.assertRaises(HTTPException):
+                require_admin("wrong")
+            self.assertIsNone(require_admin("secret"))
+        finally:
+            settings.admin_token = previous
 
 
 if __name__ == "__main__":

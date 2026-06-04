@@ -4,6 +4,7 @@ import { useCallback, useEffect, useState } from 'react'
 import { CalendarDays, ChevronDown, ChevronRight, FileText, RefreshCw } from 'lucide-react'
 import { apiGet, apiPost, formatDate, formatRelativeTime, getAppTargetDate } from '@/lib/api'
 import { MarkdownContent } from '@/components/MarkdownContent'
+import { AdminGate } from './AdminGate'
 
 export interface ReportOut {
   id: number
@@ -88,10 +89,12 @@ export function ReportList({
   return (
     <>
       <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
-        <button className="btn btn-primary" onClick={regenerate} disabled={generating}>
-          <RefreshCw size={16} className={generating ? 'spin' : ''} />
-          {generating ? generatingLabel : generateLabel}
-        </button>
+        <AdminGate message="重新生成报告会调用 LLM 并消耗服务配额。">
+          <button className="btn btn-primary" onClick={regenerate} disabled={generating}>
+            <RefreshCw size={16} className={generating ? 'spin' : ''} />
+            {generating ? generatingLabel : generateLabel}
+          </button>
+        </AdminGate>
       </div>
 
       {error && <div className="cold-start-banner" style={{ marginBottom: 16 }}>{error}</div>}

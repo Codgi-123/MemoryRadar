@@ -42,6 +42,25 @@ export function apiBase() {
 }
 
 export const publicBase = normalizeApiBase(process.env.NEXT_PUBLIC_API_URL) || 'same-origin /api'
+export const ADMIN_TOKEN_STORAGE_KEY = 'memory-watcher-admin-token'
+
+export function getAdminToken() {
+  if (typeof window === 'undefined') return ''
+  return window.localStorage.getItem(ADMIN_TOKEN_STORAGE_KEY) || ''
+}
+
+export function setAdminToken(token: string) {
+  if (typeof window !== 'undefined') window.localStorage.setItem(ADMIN_TOKEN_STORAGE_KEY, token)
+}
+
+export function clearAdminToken() {
+  if (typeof window !== 'undefined') window.localStorage.removeItem(ADMIN_TOKEN_STORAGE_KEY)
+}
+
+function adminHeaders(): HeadersInit {
+  const token = getAdminToken()
+  return token ? { 'X-Admin-Token': token } : {}
+}
 
 async function parseErrorMessage(res: Response) {
   try {
@@ -65,7 +84,7 @@ export async function apiGet<T>(path: string): Promise<T> {
 export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
   const res = await fetch(`${apiBase()}${path}`, {
     method: 'POST',
-    headers: body === undefined ? undefined : { 'Content-Type': 'application/json' },
+    headers: body === undefined ? adminHeaders() : { 'Content-Type': 'application/json', ...adminHeaders() },
     body: body === undefined ? undefined : JSON.stringify(body),
   })
   await ensureOk(res)
@@ -75,7 +94,7 @@ export async function apiPost<T>(path: string, body?: unknown): Promise<T> {
 export async function apiPatch<T>(path: string, body: unknown): Promise<T> {
   const res = await fetch(`${apiBase()}${path}`, {
     method: 'PATCH',
-    headers: { 'Content-Type': 'application/json' },
+    headers: { 'Content-Type': 'application/json', ...adminHeaders() },
     body: JSON.stringify(body),
   })
   await ensureOk(res)
@@ -83,7 +102,7 @@ export async function apiPatch<T>(path: string, body: unknown): Promise<T> {
 }
 
 export async function apiDelete(path: string): Promise<void> {
-  const res = await fetch(`${apiBase()}${path}`, { method: 'DELETE' })
+  const res = await fetch(`${apiBase()}${path}`, { method: 'DELETE', headers: adminHeaders() })
   await ensureOk(res)
 }
 
