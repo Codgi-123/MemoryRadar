@@ -1,6 +1,6 @@
 from datetime import date, datetime
 
-from pydantic import BaseModel, ConfigDict
+from pydantic import BaseModel, ConfigDict, Field
 
 
 class ProjectIn(BaseModel):
@@ -10,7 +10,7 @@ class ProjectIn(BaseModel):
     homepage_url: str | None = None
     enabled: bool = True
     priority: int = 5
-    queries: list[str] = []
+    queries: list[str] = Field(default_factory=list)
 
 
 class ProjectOut(BaseModel):
@@ -24,7 +24,7 @@ class ProjectOut(BaseModel):
     enabled: bool
     priority: int
     created_at: datetime
-    queries: list[str] = []
+    queries: list[str] = Field(default_factory=list)
 
 
 class WatchlistImport(BaseModel):

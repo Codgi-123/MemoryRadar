@@ -1,5 +1,5 @@
 import asyncio
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 
 from sqlalchemy import distinct
 from sqlalchemy.orm import Session
@@ -10,6 +10,7 @@ from app.llm.provider import summarize_daily, summarize_weekly
 from app.models import Event, GithubProjectSnapshot, JobRun, JobStatus, Project, Report, SearchQuery, SystemState
 from app.processors.events import create_events_from_raw, store_raw_items
 from app.processors.github_radar import build_project_radar, collect_github_project_snapshot, store_github_snapshot
+from app.time_utils import app_today, utc_now
 
 
 async def _collect_with_errors(label: str, collector) -> tuple[str, list[dict], str | None]:
@@ -26,7 +27,7 @@ async def _collect_with_limit(semaphore: asyncio.Semaphore, label: str, collecto
 
 async def _snapshot_with_errors(project: Project) -> tuple[str, dict | None, str | None]:
     try:
-        return project.name, await collect_github_project_snapshot(project), None
+        return project.name, await collect_github_project_snapshot(project, app_today()), None
     except Exception as exc:
         return project.name, None, str(exc)
 
@@ -63,13 +64,14 @@ async def run_collection(db: Session, days: int = 1) -> dict:
             store_github_snapshot(db, snapshot)
 
     report_context = build_report_context(db)
+    target_date = app_today()
     event_count = create_events_from_raw(
         db,
-        target_date=date.today(),
+        target_date=target_date,
         is_cold_start=report_context["is_cold_start"],
         collection_days=days,
     )
-    _set_state(db, "last_collection_at", datetime.utcnow().isoformat())
+    _set_state(db, "last_collection_at", utc_now().isoformat())
     return {"raw_inserted": total_raw, "events_inserted": event_count, "errors": errors}
 
 
@@ -93,20 +95,20 @@ def run_collection_job(job_id: int, days: int = 1) -> None:
             job.status = JobStatus.success.value
             job.error_message = "\n".join(result["errors"]) if result["errors"] else None
             if days >= 7:
-                _set_state(db, "baseline_backfill_completed_at", datetime.utcnow().isoformat())
+                _set_state(db, "baseline_backfill_completed_at", utc_now().isoformat())
                 _set_state(db, "baseline_days", str(days))
         except Exception as exc:
             job.status = JobStatus.failed.value
             job.error_message = str(exc)
         finally:
-            job.finished_at = datetime.utcnow()
+            job.finished_at = utc_now()
             db.commit()
     finally:
         db.close()
 
 
 async def generate_daily_report(db: Session, target_date: date | None = None) -> Report:
-    target_date = target_date or date.today()
+    target_date = target_date or app_today()
     events = (
         db.query(Event)
         .filter(Event.event_date >= target_date - timedelta(days=1))
@@ -120,50 +122,17 @@ async def generate_daily_report(db: Session, target_date: date | None = None) ->
         .order_by(Report.report_date.desc())
         .first()
     )
-    payload = [
-        {
-            "entity": event.entity,
-            "event_type": event.event_type,
-            "title": event.title,
-            "summary": event.summary,
-            "url": event.url,
-            "source": event.source,
-            "event_date": event.event_date.isoformat(),
-            "importance_score": event.importance_score,
-            "novelty_score": event.novelty_score,
-            "date_confidence": event.date_confidence,
-            "is_baseline_event": event.is_baseline_event,
-            "is_market_latest": event.is_market_latest,
-            "evidence_reason": event.evidence_reason,
-        }
-        for event in events
-    ]
+    payload = [_event_payload(event) for event in events]
     project_radar = build_project_radar(db, target_date)
     report_context = build_report_context(db, target_date)
     content, model = await summarize_daily(payload, previous.content_markdown if previous else None, project_radar, report_context)
     title = f"Agent Memory 市场日报 - {target_date.isoformat()}"
 
-    report = db.query(Report).filter(Report.report_date == target_date, Report.report_type == "daily").first()
-    if report:
-        report.title = title
-        report.content_markdown = content
-        report.generated_by_model = model
-    else:
-        db.add(
-            Report(
-                report_date=target_date,
-                report_type="daily",
-                title=title,
-                content_markdown=content,
-                generated_by_model=model,
-            )
-        )
-    db.commit()
-    return db.query(Report).filter(Report.report_date == target_date, Report.report_type == "daily").one()
+    return _upsert_report(db, target_date, "daily", title, content, model)
 
 
 async def generate_weekly_report(db: Session, target_date: date | None = None) -> Report:
-    target_date = target_date or date.today()
+    target_date = target_date or app_today()
     start_date = target_date - timedelta(days=6)
     daily_reports = (
         db.query(Report)
@@ -187,24 +156,7 @@ async def generate_weekly_report(db: Session, target_date: date | None = None) -
         }
         for report in daily_reports
     ]
-    event_payload = [
-        {
-            "entity": event.entity,
-            "event_type": event.event_type,
-            "title": event.title,
-            "summary": event.summary,
-            "url": event.url,
-            "source": event.source,
-            "event_date": event.event_date.isoformat(),
-            "importance_score": event.importance_score,
-            "novelty_score": event.novelty_score,
-            "date_confidence": event.date_confidence,
-            "is_baseline_event": event.is_baseline_event,
-            "is_market_latest": event.is_market_latest,
-            "evidence_reason": event.evidence_reason,
-        }
-        for event in weekly_events
-    ]
+    event_payload = [_event_payload(event) for event in weekly_events]
     project_radar = build_project_radar(db, target_date)
     report_context = build_report_context(db, target_date) | {
         "report_type": "weekly",
@@ -217,23 +169,52 @@ async def generate_weekly_report(db: Session, target_date: date | None = None) -
     content, model = await summarize_weekly(daily_payload, event_payload, project_radar, report_context)
     title = f"Agent Memory 市场周报 - {start_date.isoformat()} 至 {target_date.isoformat()}"
 
-    report = db.query(Report).filter(Report.report_date == target_date, Report.report_type == "weekly").first()
+    return _upsert_report(db, target_date, "weekly", title, content, model)
+
+
+def _event_payload(event: Event) -> dict:
+    return {
+        "entity": event.entity,
+        "event_type": event.event_type,
+        "title": event.title,
+        "summary": event.summary,
+        "url": event.url,
+        "source": event.source,
+        "event_date": event.event_date.isoformat(),
+        "importance_score": event.importance_score,
+        "novelty_score": event.novelty_score,
+        "date_confidence": event.date_confidence,
+        "is_baseline_event": event.is_baseline_event,
+        "is_market_latest": event.is_market_latest,
+        "evidence_reason": event.evidence_reason,
+    }
+
+
+def _upsert_report(
+    db: Session,
+    report_date: date,
+    report_type: str,
+    title: str,
+    content_markdown: str,
+    generated_by_model: str | None,
+) -> Report:
+    report = db.query(Report).filter(Report.report_date == report_date, Report.report_type == report_type).first()
     if report:
         report.title = title
-        report.content_markdown = content
-        report.generated_by_model = model
+        report.content_markdown = content_markdown
+        report.generated_by_model = generated_by_model
     else:
-        db.add(
-            Report(
-                report_date=target_date,
-                report_type="weekly",
-                title=title,
-                content_markdown=content,
-                generated_by_model=model,
-            )
+        report = Report(
+            report_date=report_date,
+            report_type=report_type,
+            title=title,
+            content_markdown=content_markdown,
+            generated_by_model=generated_by_model,
         )
+        db.add(report)
     db.commit()
-    return db.query(Report).filter(Report.report_date == target_date, Report.report_type == "weekly").one()
+    db.refresh(report)
+    return report
 
 
 def run_daily_job(db: Session) -> dict:
@@ -244,13 +225,13 @@ def run_daily_job(db: Session) -> dict:
         collection = asyncio.run(run_collection(db))
         report = asyncio.run(generate_daily_report(db))
         job.status = JobStatus.success.value
-        job.finished_at = datetime.utcnow()
+        job.finished_at = utc_now()
         db.commit()
         return {"job_id": job.id, "collection": collection, "report_id": report.id}
     except Exception as exc:
         job.status = JobStatus.failed.value
         job.error_message = str(exc)
-        job.finished_at = datetime.utcnow()
+        job.finished_at = utc_now()
         db.commit()
         raise
 
@@ -262,19 +243,19 @@ def run_weekly_job(db: Session) -> dict:
     try:
         report = asyncio.run(generate_weekly_report(db))
         job.status = JobStatus.success.value
-        job.finished_at = datetime.utcnow()
+        job.finished_at = utc_now()
         db.commit()
         return {"job_id": job.id, "report_id": report.id}
     except Exception as exc:
         job.status = JobStatus.failed.value
         job.error_message = str(exc)
-        job.finished_at = datetime.utcnow()
+        job.finished_at = utc_now()
         db.commit()
         raise
 
 
 def build_report_context(db: Session, target_date: date | None = None) -> dict:
-    target_date = target_date or date.today()
+    target_date = target_date or app_today()
     snapshot_dates = (
         db.query(distinct(GithubProjectSnapshot.snapshot_date))
         .filter(GithubProjectSnapshot.snapshot_date <= target_date)

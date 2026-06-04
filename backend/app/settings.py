@@ -34,6 +34,7 @@ class Settings(BaseSettings):
     anthropic_model: str = "claude-3-5-sonnet-latest"
     llm_provider: str = "openai"
     report_language: str = "zh-CN"
+    admin_token: str | None = None
 
 
 settings = Settings()
