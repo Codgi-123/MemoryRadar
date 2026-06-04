@@ -32,10 +32,12 @@ function inferApiBase() {
   }
 }
 
-function copyText(text: string): boolean {
+async function copyText(text: string): Promise<boolean> {
   if (navigator.clipboard && window.isSecureContext) {
-    navigator.clipboard.writeText(text)
-    return true
+    try {
+      await navigator.clipboard.writeText(text)
+      return true
+    } catch {}
   }
   const textarea = document.createElement('textarea')
   textarea.value = text
@@ -56,8 +58,8 @@ function copyText(text: string): boolean {
 function CodeBlock({ value }: { value: string }) {
   const [copied, setCopied] = useState(false)
 
-  function copy() {
-    if (copyText(value)) {
+  async function copy() {
+    if (await copyText(value)) {
       setCopied(true)
       setTimeout(() => setCopied(false), 1200)
     }

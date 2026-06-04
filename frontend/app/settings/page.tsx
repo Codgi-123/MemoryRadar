@@ -1,9 +1,10 @@
+import { AdminStatusBar } from '../components/AdminGate'
 import { apiGet } from '@/lib/api'
 
 interface SettingsStatus {
   serper_search: boolean; serper_base_url: string; github: boolean
   openai: boolean; openai_base_url: string; anthropic: boolean
-  anthropic_base_url: string; llm_provider: string; daily_run_time: string; timezone: string
+  anthropic_base_url: string; llm_provider: string; daily_run_time: string; weekly_run_time: string; timezone: string; admin_required: boolean
 }
 
 function Dot({ ok }: { ok: boolean }) {
@@ -63,12 +64,22 @@ export default async function SettingsPage() {
               <div style={{ fontWeight: 600 }}>{settings.llm_provider}</div>
             </div>
             <div>
-              <div className="text-muted text-sm">定时任务执行时间</div>
+              <div className="text-muted text-sm">每日任务执行时间</div>
               <div style={{ fontWeight: 600, fontFamily: 'var(--font-mono)' }}>{settings.daily_run_time}</div>
+            </div>
+            <div>
+              <div className="text-muted text-sm">每周任务执行时间</div>
+              <div style={{ fontWeight: 600, fontFamily: 'var(--font-mono)' }}>{settings.weekly_run_time}</div>
             </div>
             <div>
               <div className="text-muted text-sm">时区</div>
               <div style={{ fontWeight: 600 }}>{settings.timezone}</div>
+            </div>
+            <div>
+              <div className="text-muted text-sm">公开写操作保护</div>
+              <div style={{ fontWeight: 600, color: settings.admin_required ? 'var(--success)' : 'var(--danger)' }}>
+                {settings.admin_required ? '已启用' : '未启用'}
+              </div>
             </div>
           </div>
         </div>
@@ -86,8 +97,16 @@ export default async function SettingsPage() {
           <div><span style={{color:'var(--accent)'}}>LLM_PROVIDER</span>=openai | anthropic</div>
           <div><span style={{color:'var(--accent)'}}>DAILY_RUN_CRON_HOUR</span>=8</div>
           <div><span style={{color:'var(--accent)'}}>DAILY_RUN_CRON_MINUTE</span>=30</div>
+          <div><span style={{color:'var(--accent)'}}>WEEKLY_RUN_CRON_DAY_OF_WEEK</span>=wednesday</div>
+          <div><span style={{color:'var(--accent)'}}>WEEKLY_RUN_CRON_HOUR</span>=10</div>
+          <div><span style={{color:'var(--accent)'}}>WEEKLY_RUN_CRON_MINUTE</span>=0</div>
           <div><span style={{color:'var(--accent)'}}>APP_TIMEZONE</span>=Asia/Shanghai</div>
+          <div><span style={{color:'var(--accent)'}}>ADMIN_TOKEN</span>=change-me-to-a-long-random-token</div>
         </div>
+      </div>
+
+      <div className="mt-6">
+        <AdminStatusBar />
       </div>
     </div>
   )
