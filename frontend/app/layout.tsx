@@ -1,7 +1,7 @@
 import './globals.css'
 import type { Metadata } from 'next'
 import { Sidebar } from './components/Sidebar'
-import { AdminProvider, AdminStatusBar } from './components/AdminGate'
+import { AdminProvider } from './components/AdminGate'
 
 export const metadata: Metadata = {
   title: 'Memory Market Watcher',
@@ -16,7 +16,6 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
           <div className="app-layout">
             <Sidebar />
             <main className="main-content">
-              <AdminStatusBar />
               {children}
             </main>
           </div>

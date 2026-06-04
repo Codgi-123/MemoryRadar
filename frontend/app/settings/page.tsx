@@ -1,3 +1,4 @@
+import { AdminStatusBar } from '../components/AdminGate'
 import { apiGet } from '@/lib/api'
 
 interface SettingsStatus {
@@ -102,6 +103,10 @@ export default async function SettingsPage() {
           <div><span style={{color:'var(--accent)'}}>APP_TIMEZONE</span>=Asia/Shanghai</div>
           <div><span style={{color:'var(--accent)'}}>ADMIN_TOKEN</span>=change-me-to-a-long-random-token</div>
         </div>
+      </div>
+
+      <div className="mt-6">
+        <AdminStatusBar />
       </div>
     </div>
   )

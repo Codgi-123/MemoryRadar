@@ -95,7 +95,7 @@ interface AdminGateProps {
   message?: string
 }
 
-export function AdminGate({ children, message = '此操作需要先在页面顶部解锁管理员模式。' }: AdminGateProps) {
+export function AdminGate({ children, message = '此操作需要先到设置页面底部解锁管理员模式。' }: AdminGateProps) {
   const { adminRequired, unlocked } = useAdminContext()
 
   if (adminRequired === null) return null
