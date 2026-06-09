@@ -1,4 +1,3 @@
-import { apiGet, formatDateTime, publicBase } from '@/lib/api'
 import Link from 'next/link'
 import { LayoutDashboard, Zap, Star, FileText, CheckCircle, XCircle, Clock, Loader, AlertTriangle } from 'lucide-react'
 import { MarkdownContent } from '@/components/MarkdownContent'
@@ -15,10 +14,51 @@ interface DashboardData {
   recent_jobs: { id: number; job_type: string; status: string; started_at: string; finished_at: string | null; error_message: string | null }[]
 }
 
+function normalizeApiBase(value: string | undefined) {
+  const raw = value?.trim()
+  if (raw && raw !== 'undefined' && raw !== 'null') {
+    return raw.replace(/\/+$/, '')
+  }
+  return ''
+}
+
+const publicBase = normalizeApiBase(process.env.NEXT_PUBLIC_API_URL) || 'same-origin /api'
+
+function serverApiCandidates() {
+  const values = [
+    process.env.API_INTERNAL_URL,
+    process.env.INTERNAL_API_BASE_URL,
+    process.env.NEXT_PUBLIC_API_URL,
+    'http://localhost:8000',
+    'http://127.0.0.1:8000',
+  ]
+  return Array.from(new Set(values.map(normalizeApiBase).filter(Boolean)))
+}
+
+async function getDashboardData(): Promise<DashboardData> {
+  let lastError: unknown
+  for (const base of serverApiCandidates()) {
+    try {
+      const res = await fetch(`${base}/api/dashboard`, { cache: 'no-store' })
+      if (!res.ok) throw new Error(`API error from ${base}: ${res.status}`)
+      return res.json()
+    } catch (error) {
+      lastError = error
+    }
+  }
+  throw lastError instanceof Error ? lastError : new Error('Dashboard API request failed')
+}
+
+function formatDateTime(dateStr: string): string {
+  const hasTimezone = /(?:Z|[+-]\d{2}:?\d{2})$/.test(dateStr)
+  const d = new Date(hasTimezone ? dateStr : `${dateStr}Z`)
+  return d.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
+}
+
 export default async function DashboardPage() {
   let data: DashboardData
   try {
-    data = await apiGet<DashboardData>('/api/dashboard')
+    data = await getDashboardData()
   } catch (error) {
     console.error('Dashboard SSR fetch failed:', error)
     return (

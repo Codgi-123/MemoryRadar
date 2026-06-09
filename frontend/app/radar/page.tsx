@@ -1,4 +1,4 @@
-import { apiGet, formatRelativeTime } from '@/lib/api'
+import { apiGet, formatRelativeTime } from '@/lib/server-api'
 import { Star, GitFork, GitCommit, Tag, AlertTriangle, ExternalLink } from 'lucide-react'
 
 interface RadarItem {

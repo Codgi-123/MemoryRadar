@@ -1,5 +1,5 @@
 import { AdminStatusBar } from '../components/AdminGate'
-import { apiGet } from '@/lib/api'
+import { apiGet } from '@/lib/server-api'
 
 interface SettingsStatus {
   serper_search: boolean; serper_base_url: string; github: boolean
