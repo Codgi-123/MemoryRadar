@@ -36,6 +36,17 @@ function serverApiBase() {
   )
 }
 
+function serverApiCandidates() {
+  const values = [
+    process.env.API_INTERNAL_URL,
+    process.env.INTERNAL_API_BASE_URL,
+    process.env.NEXT_PUBLIC_API_URL,
+    'http://localhost:8000',
+    'http://127.0.0.1:8000',
+  ]
+  return Array.from(new Set(values.map(normalizeApiBase).filter(Boolean)))
+}
+
 export function apiBase() {
   if (typeof window === 'undefined') return serverApiBase()
   return browserApiBase()
@@ -76,6 +87,20 @@ async function ensureOk(res: Response) {
 }
 
 export async function apiGet<T>(path: string): Promise<T> {
+  if (typeof window === 'undefined') {
+    let lastError: unknown
+    for (const base of serverApiCandidates()) {
+      try {
+        const res = await fetch(`${base}${path}`, { cache: 'no-store' })
+        await ensureOk(res)
+        return res.json()
+      } catch (error) {
+        lastError = error
+      }
+    }
+    throw lastError instanceof Error ? lastError : new Error(`API request failed: ${path}`)
+  }
+
   const res = await fetch(`${apiBase()}${path}`, { cache: 'no-store' })
   await ensureOk(res)
   return res.json()

@@ -19,7 +19,8 @@ export default async function DashboardPage() {
   let data: DashboardData
   try {
     data = await apiGet<DashboardData>('/api/dashboard')
-  } catch {
+  } catch (error) {
+    console.error('Dashboard SSR fetch failed:', error)
     return (
       <div>
         <div className="page-header">
