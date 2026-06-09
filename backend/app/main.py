@@ -83,6 +83,11 @@ def settings_status() -> dict:
     }
 
 
+@app.get("/api/admin/verify")
+def verify_admin(_: None = Depends(require_admin)) -> dict:
+    return {"ok": True}
+
+
 @app.get("/api/system/status")
 def system_status(db: Session = Depends(get_db)) -> dict:
     return build_report_context(db)

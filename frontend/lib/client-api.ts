@@ -44,6 +44,14 @@ export function clearAdminToken() {
   window.localStorage.removeItem(ADMIN_TOKEN_STORAGE_KEY)
 }
 
+export async function verifyAdminToken(token: string): Promise<boolean> {
+  const res = await fetch(`${browserApiBase()}/api/admin/verify`, {
+    cache: 'no-store',
+    headers: token ? { 'X-Admin-Token': token } : {},
+  })
+  return res.ok
+}
+
 function adminHeaders(): HeadersInit {
   const token = getAdminToken()
   return token ? { 'X-Admin-Token': token } : {}

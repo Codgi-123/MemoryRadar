@@ -1,7 +1,7 @@
 'use client'
 
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
-import { apiGet, clearAdminToken, getAdminToken, setAdminToken } from '@/lib/client-api'
+import { apiGet, clearAdminToken, getAdminToken, setAdminToken, verifyAdminToken } from '@/lib/client-api'
 
 interface SettingsStatus {
   admin_required?: boolean
@@ -10,7 +10,7 @@ interface SettingsStatus {
 interface AdminContextValue {
   adminRequired: boolean | null
   unlocked: boolean
-  unlock: (token: string) => void
+  unlock: (token: string) => Promise<boolean>
   logout: () => void
 }
 
@@ -28,22 +28,45 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
 
   useEffect(() => {
     const storedToken = getAdminToken()
-    setUnlocked(Boolean(storedToken))
     apiGet<SettingsStatus>('/api/settings/status')
-      .then((status) => {
+      .then(async (status) => {
         const required = Boolean(status.admin_required)
         setAdminRequired(required)
-        if (!required) setUnlocked(true)
+        if (!required) {
+          setUnlocked(true)
+          return
+        }
+        if (storedToken && await verifyAdminToken(storedToken)) {
+          setUnlocked(true)
+        } else {
+          clearAdminToken()
+          setUnlocked(false)
+        }
       })
-      .catch(() => setAdminRequired(true))
+      .catch(() => {
+        clearAdminToken()
+        setAdminRequired(true)
+        setUnlocked(false)
+      })
   }, [])
 
   const value = useMemo<AdminContextValue>(() => ({
     adminRequired,
     unlocked,
-    unlock: (token: string) => {
-      setAdminToken(token)
-      setUnlocked(true)
+    unlock: async (token: string) => {
+      if (!adminRequired) {
+        setUnlocked(true)
+        return true
+      }
+      const ok = await verifyAdminToken(token)
+      if (ok) {
+        setAdminToken(token)
+        setUnlocked(true)
+        return true
+      }
+      clearAdminToken()
+      setUnlocked(false)
+      return false
     },
     logout: () => {
       clearAdminToken()
@@ -57,8 +80,19 @@ export function AdminProvider({ children }: { children: React.ReactNode }) {
 export function AdminStatusBar() {
   const { adminRequired, unlocked, unlock, logout } = useAdminContext()
   const [token, setToken] = useState('')
+  const [error, setError] = useState('')
+  const [checking, setChecking] = useState(false)
 
   if (adminRequired !== true) return null
+
+  const submit = async () => {
+    if (!token.trim() || checking) return
+    setChecking(true)
+    setError('')
+    const ok = await unlock(token.trim())
+    if (!ok) setError('管理员口令不正确')
+    setChecking(false)
+  }
 
   return (
     <div className="card" style={{ marginBottom: 18, padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
@@ -76,14 +110,20 @@ export function AdminStatusBar() {
             className="form-input"
             type="password"
             value={token}
-            onChange={(event) => setToken(event.target.value)}
+            onChange={(event) => {
+              setToken(event.target.value)
+              setError('')
+            }}
             onKeyDown={(event) => {
-              if (event.key === 'Enter' && token.trim()) unlock(token.trim())
+              if (event.key === 'Enter') submit()
             }}
             placeholder="管理员口令"
             style={{ maxWidth: 260 }}
           />
-          <button className="btn btn-primary" disabled={!token.trim()} onClick={() => unlock(token.trim())}>解锁</button>
+          <button className="btn btn-primary" disabled={!token.trim() || checking} onClick={submit}>
+            {checking ? '校验中...' : '解锁'}
+          </button>
+          {error && <span className="text-sm" style={{ color: 'var(--danger)', alignSelf: 'center' }}>{error}</span>}
         </div>
       )}
     </div>
