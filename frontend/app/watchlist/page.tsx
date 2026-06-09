@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { Plus, Edit2, Trash2, ExternalLink, X, Download, Upload } from 'lucide-react'
-import { apiGet, apiPost, apiPatch, apiDelete } from '@/lib/api'
+import { apiGet, apiPost, apiPatch, apiDelete } from '@/lib/client-api'
 import { Toast } from '../components/Toast'
 import { AdminGate } from '../components/AdminGate'
 

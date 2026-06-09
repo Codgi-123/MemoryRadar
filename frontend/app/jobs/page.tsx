@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react'
 import { Play, RefreshCw, Database, ChevronDown, ChevronRight } from 'lucide-react'
-import { apiGet, apiPost, formatDateTime } from '@/lib/api'
+import { apiGet, apiPost, formatDateTime } from '@/lib/client-api'
 import { AdminGate } from '../components/AdminGate'
 
 interface JobRunOut {

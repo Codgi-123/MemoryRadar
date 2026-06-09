@@ -3,6 +3,8 @@ import Link from 'next/link'
 import { LayoutDashboard, Zap, Star, FileText, CheckCircle, XCircle, Clock, Loader, AlertTriangle } from 'lucide-react'
 import { MarkdownContent } from '@/components/MarkdownContent'
 
+export const dynamic = 'force-dynamic'
+
 interface DashboardData {
   projects: number
   events_today: number

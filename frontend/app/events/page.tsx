@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
 import { Search, ExternalLink, ChevronLeft, ChevronRight } from 'lucide-react'
-import { apiGet, apiPatch, formatDate } from '@/lib/api'
+import { apiGet, apiPatch, formatDate } from '@/lib/client-api'
 import { AdminGate } from '../components/AdminGate'
 
 interface EventOut {

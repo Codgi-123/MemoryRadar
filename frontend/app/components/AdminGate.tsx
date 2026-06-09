@@ -1,7 +1,7 @@
 'use client'
 
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
-import { apiGet, clearAdminToken, getAdminToken, setAdminToken } from '@/lib/api'
+import { apiGet, clearAdminToken, getAdminToken, setAdminToken } from '@/lib/client-api'
 
 interface SettingsStatus {
   admin_required?: boolean

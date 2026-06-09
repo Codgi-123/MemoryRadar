@@ -2,7 +2,7 @@
 
 import { useCallback, useEffect, useState } from 'react'
 import { CalendarDays, ChevronDown, ChevronRight, FileText, RefreshCw } from 'lucide-react'
-import { apiGet, apiPost, formatDate, formatRelativeTime, getAppTargetDate } from '@/lib/api'
+import { apiGet, apiPost, formatDate, formatRelativeTime, getAppTargetDate } from '@/lib/client-api'
 import { MarkdownContent } from '@/components/MarkdownContent'
 import { AdminGate } from './AdminGate'
 
