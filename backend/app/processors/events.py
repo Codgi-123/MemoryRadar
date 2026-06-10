@@ -37,6 +37,39 @@ KEYWORDS = {
     "funding": "funding",
 }
 
+MARKET_LATEST_STORY_COOLDOWN_DAYS = 7
+
+HARD_UPDATE_TERMS = [
+    "release notes",
+    "changelog",
+    "benchmark",
+    "leaderboard",
+    "integration",
+    "integrates",
+    "integrated",
+    "plugin",
+    "sdk",
+    "api",
+    "funding",
+    "raises",
+    "raised",
+    "acquires",
+    "partnership",
+    "version",
+    "v0.",
+    "v1.",
+    "v2.",
+    "v3.",
+    "新版本",
+    "版本",
+    "更新",
+    "功能",
+    "集成",
+    "融资",
+    "基准",
+    "榜单",
+]
+
 
 def store_raw_items(db: Session, items: list[dict]) -> int:
     inserted = 0
@@ -62,6 +95,7 @@ def create_events_from_raw(
     inserted = 0
     for raw in raw_items:
         event = _raw_to_event(raw, target_date=target_date, is_cold_start=is_cold_start, collection_days=collection_days)
+        _apply_story_cooldown(db, event, raw)
         existing = db.query(Event).filter(Event.url == event.url, Event.title == event.title).first()
         if existing:
             _sync_event_classification(existing, event)
@@ -237,6 +271,45 @@ def _is_agent_memory_relevant(raw: RawItem) -> bool:
         "记忆栈",
     ]
     return any(term in text for term in strong_terms)
+
+
+def _apply_story_cooldown(db: Session, event: Event, raw: RawItem) -> None:
+    if not event.is_market_latest:
+        return
+    if not _has_recent_market_latest(db, event):
+        return
+    if _has_hard_update_signal(raw):
+        return
+
+    event.is_market_latest = False
+    event.event_type = "market_signal"
+    event.novelty_score = min(event.novelty_score, 0.45)
+    cooldown_note = (
+        f"Same entity had a market-latest item in the previous {MARKET_LATEST_STORY_COOLDOWN_DAYS} days; "
+        "treating this as follow-on coverage unless it includes a hard update signal."
+    )
+    event.evidence_reason = f"{event.evidence_reason} {cooldown_note}" if event.evidence_reason else cooldown_note
+
+
+def _has_recent_market_latest(db: Session, event: Event) -> bool:
+    start_date = event.event_date - timedelta(days=MARKET_LATEST_STORY_COOLDOWN_DAYS)
+    return (
+        db.query(Event)
+        .filter(
+            Event.entity == event.entity,
+            Event.is_market_latest.is_(True),
+            Event.event_date >= start_date,
+            Event.event_date <= event.event_date,
+            Event.url != event.url,
+        )
+        .first()
+        is not None
+    )
+
+
+def _has_hard_update_signal(raw: RawItem) -> bool:
+    text = f"{raw.title} {raw.snippet or ''} {raw.raw_content or ''}".lower()
+    return any(term in text for term in HARD_UPDATE_TERMS)
 
 
 def _guess_entity(text: str, url: str) -> str:

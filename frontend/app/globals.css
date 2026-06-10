@@ -100,13 +100,29 @@ body {
 
 .sidebar-brand {
   position: relative;
-  font-size: 1.125rem;
-  font-weight: 700;
   color: var(--text);
   padding: 0 12px 24px;
   border-bottom: 1px solid var(--line-soft);
   margin-bottom: 16px;
-  letter-spacing: -0.02em;
+}
+
+.sidebar-brand h1 {
+  font-size: 1.45rem;
+  font-weight: 700;
+  line-height: 1.1;
+  letter-spacing: 0;
+  white-space: nowrap;
+}
+
+.sidebar-brand span {
+  display: block;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 0.88rem;
+  font-weight: 600;
+  line-height: 1.35;
+  letter-spacing: 0;
+  white-space: nowrap;
 }
 
 .sidebar-nav {
