@@ -25,9 +25,9 @@ async def summarize_weekly(
 ) -> tuple[str, str]:
     prompt = _build_weekly_prompt(daily_reports, weekly_events, project_radar or [], report_context or {})
     if settings.llm_provider == "anthropic" and settings.anthropic_api_key:
-        return await _anthropic(prompt, marker="# Agent Memory 市场周报")
+        return await _anthropic(prompt, marker="# Agent Memory 市场周报", timeout=600)
     if settings.openai_api_key:
-        return await _openai(prompt, marker="# Agent Memory 市场周报")
+        return await _openai(prompt, marker="# Agent Memory 市场周报", timeout=600)
     return _fallback_weekly_summary(daily_reports, weekly_events), "fallback-no-llm"
 
 
@@ -155,9 +155,9 @@ GitHub 项目雷达数据：
 """.strip()
 
 
-async def _openai(prompt: str, marker: str = "# Agent Memory 市场日报") -> tuple[str, str]:
+async def _openai(prompt: str, marker: str = "# Agent Memory 市场日报", timeout: float = 120) -> tuple[str, str]:
     endpoint = _chat_completions_endpoint(settings.openai_base_url)
-    async with httpx.AsyncClient(timeout=120) as client:
+    async with httpx.AsyncClient(timeout=timeout) as client:
         response = await client.post(
             endpoint,
             headers={"Authorization": f"Bearer {settings.openai_api_key}"},
@@ -180,9 +180,9 @@ def _chat_completions_endpoint(base_url: str) -> str:
     return f"{base_url}/chat/completions"
 
 
-async def _anthropic(prompt: str, marker: str = "# Agent Memory 市场日报") -> tuple[str, str]:
+async def _anthropic(prompt: str, marker: str = "# Agent Memory 市场日报", timeout: float = 120) -> tuple[str, str]:
     endpoint = f"{settings.anthropic_base_url.rstrip('/')}/v1/messages"
-    async with httpx.AsyncClient(timeout=120) as client:
+    async with httpx.AsyncClient(timeout=timeout) as client:
         response = await client.post(
             endpoint,
             headers={
