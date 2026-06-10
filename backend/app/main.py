@@ -214,7 +214,13 @@ def patch_event(event_id: int, payload: EventPatch, _: None = Depends(require_ad
 
 @app.get("/api/reports/daily", response_model=list[ReportOut])
 def list_reports(db: Session = Depends(get_db)) -> list[Report]:
-    return db.query(Report).order_by(Report.report_date.desc()).limit(60).all()
+    return (
+        db.query(Report)
+        .filter(Report.report_type == "daily")
+        .order_by(Report.report_date.desc())
+        .limit(60)
+        .all()
+    )
 
 
 @app.get("/api/reports/daily/{target_date}", response_model=ReportOut)

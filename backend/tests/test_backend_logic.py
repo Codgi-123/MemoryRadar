@@ -7,8 +7,8 @@ from sqlalchemy.orm import sessionmaker
 
 from app.bootstrap import seed_defaults
 from app.db import Base
-from app.main import require_admin
-from app.models import Event, Project, RawItem, SearchQuery
+from app.main import list_reports, list_weekly_reports, require_admin
+from app.models import Event, Project, RawItem, Report, SearchQuery
 from app.settings import settings
 from app.processors.events import _date_signal, create_events_from_raw
 from app.processors.github_radar import _changed_since, _since_start
@@ -133,6 +133,38 @@ class BackendLogicTest(unittest.TestCase):
             self.assertIsNone(require_admin("secret"))
         finally:
             settings.admin_token = previous
+
+    def test_report_lists_filter_by_report_type(self) -> None:
+        engine = create_engine("sqlite:///:memory:")
+        Base.metadata.create_all(bind=engine)
+        SessionLocal = sessionmaker(bind=engine)
+        db = SessionLocal()
+        try:
+            db.add_all(
+                [
+                    Report(
+                        report_date=date(2026, 6, 3),
+                        report_type="daily",
+                        title="Daily report",
+                        content_markdown="daily",
+                    ),
+                    Report(
+                        report_date=date(2026, 6, 3),
+                        report_type="weekly",
+                        title="Weekly report",
+                        content_markdown="weekly",
+                    ),
+                ]
+            )
+            db.commit()
+
+            daily_reports = list_reports(db)
+            weekly_reports = list_weekly_reports(db)
+
+            self.assertEqual([report.report_type for report in daily_reports], ["daily"])
+            self.assertEqual([report.report_type for report in weekly_reports], ["weekly"])
+        finally:
+            db.close()
 
     def test_seed_defaults_adds_missing_queries_to_existing_project(self) -> None:
         engine = create_engine("sqlite:///:memory:")
