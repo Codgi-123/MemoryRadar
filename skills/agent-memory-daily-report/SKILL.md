@@ -54,6 +54,15 @@ The watcher API must expose:
 - `GET /api/reports/daily` for recent reports.
 - `GET /api/reports/daily/{YYYY-MM-DD}` for one date.
 
+## Output Policy
+
+When the user asks to fetch, view, send, forward, or push a report, treat the fetched report as the final artifact.
+
+- Output the report Markdown verbatim.
+- Do not summarize, rewrite, translate, shorten, reformat, rank, or add commentary unless the user explicitly asks for analysis.
+- Preserve headings, bullets, links, dates, source URLs, and ordering exactly as returned by the API.
+- If a chat platform requires wrapping text, only add a short prefix such as `以下是日报原文：`; do not modify the report body.
+
 ## Fetch A Report
 
 Prefer the bundled script:
