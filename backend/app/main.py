@@ -330,7 +330,7 @@ if not SKILL_DIR.exists():
     SKILL_DIR = _APP_ROOT.parent / "skills" / "agent-memory-daily-report"
 
 INSTALL_SH_TEMPLATE = r"""#!/usr/bin/env bash
-# Agent Memory Daily Report Skill 安装脚本
+# Agent Memory Daily / Weekly Report Skill 安装脚本
 # 用法（默认装到 Claude Code skills 目录）：
 #   curl -fsSL {base_url}/api/skill/install.sh | bash
 #
@@ -344,7 +344,7 @@ SKILL_DIR="${{SKILL_DIR:-$DEFAULT_DIR}}"
 BASE_URL="{base_url}"
 
 echo ""
-echo "Installing Agent Memory Daily Report Skill"
+echo "Installing Agent Memory Daily / Weekly Report Skill"
 echo "  → $SKILL_DIR"
 echo ""
 
@@ -372,7 +372,9 @@ echo "  Config:   $SKILL_DIR/.memory-report-skill.json"
 echo ""
 echo "Next: restart your Agent or start a new conversation, then try:"
 echo "  - 获取今天的 Agent Memory 市场日报"
+echo "  - 获取最新 Agent Memory 市场周报"
 echo "  - 推送日报到飞书群"
+echo "  - 推送周报到飞书群"
 echo ""
 echo "Other Agent platforms (re-run with SKILL_DIR set):"
 echo "  Codex CLI:    SKILL_DIR=\$HOME/.codex/skills/agent-memory-daily-report  bash <(curl -fsSL $BASE_URL/api/skill/install.sh)"

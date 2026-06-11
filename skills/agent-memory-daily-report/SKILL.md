@@ -1,11 +1,11 @@
 ---
 name: agent-memory-daily-report
-description: Fetch generated Agent Memory daily reports from a Memory Market Watcher API, retrieve today's or a specific date's Markdown report, and schedule or send daily report notifications to webhook-based channels or other agents. Use when asked to get, forward, push, schedule, or integrate the Agent Memory market daily report.
+description: Fetch generated Agent Memory daily or weekly reports from a Memory Market Watcher API, retrieve today's/latest/specific-date Markdown report, and schedule or send report notifications to webhook-based channels or other agents. Use when asked to get, forward, push, schedule, or integrate the Agent Memory market daily report or weekly report.
 ---
 
-# Agent Memory Daily Report
+# Agent Memory Daily And Weekly Report
 
-Use this skill to retrieve generated Agent Memory market daily reports and push them to another agent, chat channel, webhook, or scheduler.
+Use this skill to retrieve generated Agent Memory market daily or weekly reports and push them to another agent, chat channel, webhook, or scheduler.
 
 ## Installation
 
@@ -53,6 +53,8 @@ The watcher API must expose:
 
 - `GET /api/reports/daily` for recent reports.
 - `GET /api/reports/daily/{YYYY-MM-DD}` for one date.
+- `GET /api/reports/weekly` for recent weekly reports.
+- `GET /api/reports/weekly/{YYYY-MM-DD}` for one weekly report date.
 
 ## Output Policy
 
@@ -61,7 +63,7 @@ When the user asks to fetch, view, send, forward, or push a report, treat the fe
 - Output the report Markdown verbatim.
 - Do not summarize, rewrite, translate, shorten, reformat, rank, or add commentary unless the user explicitly asks for analysis.
 - Preserve headings, bullets, links, dates, source URLs, and ordering exactly as returned by the API.
-- If a chat platform requires wrapping text, only add a short prefix such as `以下是日报原文：`; do not modify the report body.
+- If a chat platform requires wrapping text, only add a short prefix such as `以下是报告原文：`; do not modify the report body.
 
 ## Fetch A Report
 
@@ -73,10 +75,18 @@ python skills/agent-memory-daily-report/scripts/daily_report.py fetch --date 202
 python skills/agent-memory-daily-report/scripts/daily_report.py fetch --latest
 ```
 
+Fetch a weekly report:
+
+```bash
+python skills/agent-memory-daily-report/scripts/daily_report.py fetch --report-type weekly --latest
+python skills/agent-memory-daily-report/scripts/daily_report.py fetch --report-type weekly --date 2026-06-10
+```
+
 Output defaults to Markdown. Use JSON when another agent needs structured fields:
 
 ```bash
 python skills/agent-memory-daily-report/scripts/daily_report.py fetch --date today --format json
+python skills/agent-memory-daily-report/scripts/daily_report.py fetch --report-type weekly --latest --format json
 ```
 
 ## Push A Report
@@ -93,6 +103,12 @@ Push a specific date:
 python skills/agent-memory-daily-report/scripts/daily_report.py push --date 2026-06-02
 ```
 
+Push the latest weekly report:
+
+```bash
+python skills/agent-memory-daily-report/scripts/daily_report.py push --report-type weekly --latest
+```
+
 Override channel options inline:
 
 ```bash
@@ -102,7 +118,7 @@ python skills/agent-memory-daily-report/scripts/daily_report.py push \
   --webhook-type feishu
 ```
 
-## Schedule Daily Push
+## Schedule Report Push
 
 For cron:
 
@@ -112,6 +128,12 @@ For cron:
 
 If the host environment has its own automation/reminder system, schedule that same command after the report generation time.
 
+For weekly push, schedule after the weekly report generation time:
+
+```cron
+15 10 * * 3 cd /path/to/project && MEMORY_REPORT_API_BASE={{BASE_URL}} MEMORY_REPORT_WEBHOOK_URL=https://... MEMORY_REPORT_WEBHOOK_TYPE=feishu python skills/agent-memory-daily-report/scripts/daily_report.py push --report-type weekly --latest
+```
+
 ## Agent Workflow
 
 When another agent uses this skill:
@@ -119,9 +141,10 @@ When another agent uses this skill:
 1. Check `MEMORY_REPORT_API_BASE`.
    - If it is absent, look for `.memory-report-skill.json`.
    - If both are absent, run the install command above.
-2. Fetch the target report by date; use `--latest` only when the user asks for the newest report.
-3. If pushing, use the channel-specific webhook type.
-4. Preserve Markdown links in the report; do not strip source URLs.
-5. If the date report is missing, report that no generated report exists and optionally call the watcher API's regenerate endpoint if the user explicitly allows generation.
+2. Choose `daily` by default. Use `--report-type weekly` when the user asks for 周报 / weekly report.
+3. Fetch the target report by date; use `--latest` only when the user asks for the newest report.
+4. If pushing, use the channel-specific webhook type.
+5. Preserve Markdown links in the report; do not strip source URLs.
+6. If the date report is missing, report that no generated report exists and optionally call the watcher API's regenerate endpoint if the user explicitly allows generation.
 
 For exact API and payload details, read `references/api.md` only when needed.

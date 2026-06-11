@@ -1,4 +1,4 @@
 interface:
-  display_name: "Agent Memory Daily Report"
-  short_description: "Fetch and push generated Agent Memory daily reports."
-  default_prompt: "Use $agent-memory-daily-report to fetch today's Agent Memory daily report and push it to my configured channel."
+  display_name: "Agent Memory Reports"
+  short_description: "Fetch and push generated Agent Memory daily or weekly reports."
+  default_prompt: "Use $agent-memory-daily-report to fetch today's Agent Memory daily report or the latest weekly report and push it to my configured channel."

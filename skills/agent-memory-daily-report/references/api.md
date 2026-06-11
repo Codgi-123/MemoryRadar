@@ -4,7 +4,7 @@ Use the Memory Watcher frontend `/skills` page to generate the deployment-specif
 
 ## Endpoints
 
-### List reports
+### List daily reports
 
 ```http
 GET /api/reports/daily
@@ -12,7 +12,7 @@ GET /api/reports/daily
 
 Returns recent daily reports, newest first.
 
-### Get one report
+### Get one daily report
 
 ```http
 GET /api/reports/daily/{YYYY-MM-DD}
@@ -20,13 +20,37 @@ GET /api/reports/daily/{YYYY-MM-DD}
 
 Returns `404` if no report has been generated for that date.
 
-### Regenerate one report
+### Regenerate one daily report
 
 ```http
 POST /api/reports/daily/{YYYY-MM-DD}/regenerate
 ```
 
 Use only when the user explicitly wants to generate or refresh the report.
+
+### List weekly reports
+
+```http
+GET /api/reports/weekly
+```
+
+Returns recent weekly reports, newest first.
+
+### Get one weekly report
+
+```http
+GET /api/reports/weekly/{YYYY-MM-DD}
+```
+
+Returns `404` if no weekly report has been generated for that date.
+
+### Regenerate one weekly report
+
+```http
+POST /api/reports/weekly/{YYYY-MM-DD}/regenerate
+```
+
+Use only when the user explicitly wants to generate or refresh the weekly report.
 
 ## Report Shape
 
@@ -43,6 +67,8 @@ Use only when the user explicitly wants to generate or refresh the report.
 ```
 
 `content_markdown` is the canonical report body. It may contain Markdown tables and source links.
+
+Weekly reports use the same shape with `"report_type": "weekly"` and a weekly report title.
 
 ## Webhook Payloads
 

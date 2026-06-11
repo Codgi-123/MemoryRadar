@@ -89,7 +89,7 @@ export default function SkillsPage() {
 
   return (
     <div>
-      <PageHeader title="Agent Skills" description="一行命令安装「Agent Memory 市场日报」Skill，让其他 Agent 能自动获取和推送每日日报。" />
+      <PageHeader title="Agent Skills" description="一行命令安装「Agent Memory 市场报告」Skill，让其他 Agent 能自动获取和推送每日/每周报告。" />
 
       <Card className="border-accent bg-accent-soft">
         <div className="mb-3 flex items-center gap-2 font-semibold text-accent">
@@ -100,7 +100,7 @@ export default function SkillsPage() {
         </p>
         <CodeBlock value={agentInstruction} />
         <p className="mt-3 text-[0.875rem] leading-relaxed text-muted">
-          Agent 会访问上面的 SKILL.md 链接（纯文本 Markdown），读到安装命令后自动执行 <code>curl ... | bash</code> 完成安装。
+          Agent 会访问上面的 SKILL.md 链接（纯文本 Markdown），读到安装命令后自动执行 <code>curl ... | bash</code> 完成安装；安装后可获取或推送日报和周报。
         </p>
       </Card>
     </div>

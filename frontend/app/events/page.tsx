@@ -1,7 +1,7 @@
 'use client'
 
 import { useState, useEffect, useMemo, useCallback } from 'react'
-import { Search, ExternalLink, ChevronLeft, ChevronRight } from 'lucide-react'
+import { Search, ExternalLink, ChevronLeft, ChevronRight, ChevronDown } from 'lucide-react'
 import clsx from 'clsx'
 import { apiGet, apiPatch, formatDate } from '@/lib/client-api'
 import { AdminGate } from '../components/AdminGate'
@@ -17,6 +17,7 @@ interface EventOut {
 type GroupMode = 'none' | 'date' | 'entity' | 'source' | 'type'
 
 const PAGE_SIZE = 20
+const GROUP_PAGE_SIZE = 8
 const STATUS_OPTIONS = [
   { value: 'new', label: '新' },
   { value: 'important', label: '重要' },
@@ -30,6 +31,18 @@ const GROUP_OPTIONS: { value: GroupMode; label: string }[] = [
   { value: 'source', label: '按来源' },
   { value: 'type', label: '按事件类型' },
 ]
+
+interface EventGroup {
+  id: string
+  key: string
+  label: string
+  events: EventOut[]
+  latestCount: number
+  baselineCount: number
+  importantCount: number
+  maxImportance: number
+  latestEventDate: string
+}
 
 function eventMatchesSearch(event: EventOut, keyword: string) {
   const q = keyword.trim().toLowerCase()
@@ -78,30 +91,41 @@ function sortForGroupMode(events: EventOut[], mode: GroupMode) {
   })
 }
 
-function groupEvents(events: EventOut[], mode: GroupMode) {
-  const groups: {
-    key: string
-    label: string
-    events: EventOut[]
-    latestCount: number
-    baselineCount: number
-  }[] = []
-  const byKey = new Map<string, (typeof groups)[number]>()
+function groupEvents(events: EventOut[], mode: Exclude<GroupMode, 'none'>) {
+  const groups: EventGroup[] = []
+  const byKey = new Map<string, EventGroup>()
 
   for (const event of events) {
     const key = groupKey(event, mode)
     let group = byKey.get(key)
     if (!group) {
-      group = { key, label: groupLabel(key, mode), events: [], latestCount: 0, baselineCount: 0 }
+      group = {
+        id: `${mode}:${key}`,
+        key,
+        label: groupLabel(key, mode),
+        events: [],
+        latestCount: 0,
+        baselineCount: 0,
+        importantCount: 0,
+        maxImportance: 0,
+        latestEventDate: event.event_date,
+      }
       byKey.set(key, group)
       groups.push(group)
     }
     group.events.push(event)
     if (event.is_market_latest) group.latestCount += 1
     if (event.is_baseline_event) group.baselineCount += 1
+    if (event.importance_score >= 0.6) group.importantCount += 1
+    if (event.importance_score > group.maxImportance) group.maxImportance = event.importance_score
+    if (event.event_date > group.latestEventDate) group.latestEventDate = event.event_date
   }
 
   return groups
+}
+
+function pageItems<T>(items: T[], page: number, pageSize: number) {
+  return items.slice((page - 1) * pageSize, page * pageSize)
 }
 
 export default function EventsPage() {
@@ -112,6 +136,7 @@ export default function EventsPage() {
   const [statusFilter, setStatusFilter] = useState('')
   const [entityFilter, setEntityFilter] = useState('')
   const [groupBy, setGroupBy] = useState<GroupMode>('none')
+  const [collapsedGroupIds, setCollapsedGroupIds] = useState<Set<string>>(new Set())
   const [page, setPage] = useState(1)
 
   const fetchEvents = useCallback(async () => {
@@ -140,15 +165,32 @@ export default function EventsPage() {
   }, [events, entityFilter, search, statusFilter])
 
   const displayEvents = useMemo(() => sortForGroupMode(filtered, groupBy), [filtered, groupBy])
-  const totalPages = Math.max(1, Math.ceil(displayEvents.length / PAGE_SIZE))
+  const allGroups = useMemo(() => {
+    if (groupBy === 'none') return []
+    return groupEvents(displayEvents, groupBy)
+  }, [displayEvents, groupBy])
+  const paginationTotal = groupBy === 'none' ? displayEvents.length : allGroups.length
+  const activePageSize = groupBy === 'none' ? PAGE_SIZE : GROUP_PAGE_SIZE
+  const totalPages = Math.max(1, Math.ceil(paginationTotal / activePageSize))
   const currentPage = Math.min(page, totalPages)
-  const paged = displayEvents.slice((currentPage - 1) * PAGE_SIZE, currentPage * PAGE_SIZE)
-  const grouped = useMemo(() => groupBy === 'none' ? [] : groupEvents(paged, groupBy), [groupBy, paged])
+  const paged = useMemo(() => pageItems(displayEvents, currentPage, PAGE_SIZE), [currentPage, displayEvents])
+  const pagedGroups = useMemo(() => pageItems(allGroups, currentPage, GROUP_PAGE_SIZE), [allGroups, currentPage])
   const pageNumbers = visiblePageNumbers(currentPage, totalPages)
+  const visibleCollapsedCount = pagedGroups.filter(group => collapsedGroupIds.has(group.id)).length
+  const groupModeLabel = GROUP_OPTIONS.find(option => option.value === groupBy)?.label ?? ''
 
   useEffect(() => {
     if (page !== currentPage) setPage(currentPage)
   }, [currentPage, page])
+
+  useEffect(() => {
+    if (groupBy === 'none') return
+    const validIds = new Set(allGroups.map(group => group.id))
+    setCollapsedGroupIds(prev => {
+      const next = new Set([...prev].filter(id => validIds.has(id)))
+      return next.size === prev.size ? prev : next
+    })
+  }, [allGroups, groupBy])
 
   const updateStatus = async (id: number, newStatus: string) => {
     const previous = events
@@ -158,6 +200,27 @@ export default function EventsPage() {
     } catch {
       setEvents(previous)
     }
+  }
+
+  const toggleGroup = (groupId: string) => {
+    setCollapsedGroupIds(prev => {
+      const next = new Set(prev)
+      if (next.has(groupId)) next.delete(groupId)
+      else next.add(groupId)
+      return next
+    })
+  }
+
+  const collapseCurrentPageGroups = () => {
+    setCollapsedGroupIds(prev => new Set([...prev, ...pagedGroups.map(group => group.id)]))
+  }
+
+  const expandCurrentPageGroups = () => {
+    setCollapsedGroupIds(prev => {
+      const next = new Set(prev)
+      for (const group of pagedGroups) next.delete(group.id)
+      return next
+    })
   }
 
   const renderEventCard = (ev: EventOut) => (
@@ -192,6 +255,79 @@ export default function EventsPage() {
     </div>
   )
 
+  const renderGroup = (group: EventGroup) => {
+    const collapsed = collapsedGroupIds.has(group.id)
+    const importance = Math.round(group.maxImportance * 100)
+
+    return (
+      <section key={group.id} className="overflow-hidden rounded border border-line bg-surface shadow-sm">
+        <button
+          type="button"
+          className={clsx(
+            'flex w-full items-start justify-between gap-4 px-4 py-3.5 text-left transition hover:bg-bg',
+            !collapsed && 'border-b border-line-soft'
+          )}
+          aria-expanded={!collapsed}
+          onClick={() => toggleGroup(group.id)}
+        >
+          <div className="flex min-w-0 items-start gap-3">
+            <span className="mt-0.5 flex h-8 w-8 shrink-0 items-center justify-center rounded-sm border border-line bg-surface text-muted">
+              {collapsed ? <ChevronRight size={16} /> : <ChevronDown size={16} />}
+            </span>
+            <div className="min-w-0">
+              <div className="flex flex-wrap items-center gap-2">
+                <h2 className="m-0 min-w-0 text-[0.98rem] font-bold leading-tight tracking-normal text-text [overflow-wrap:anywhere]">{group.label}</h2>
+                <Badge>{group.events.length} 条</Badge>
+              </div>
+              <div className="mt-1 flex flex-wrap gap-x-3 gap-y-1 text-[0.78rem] text-muted">
+                <span>最近 {formatDate(group.latestEventDate)}</span>
+                <span>最高重要度 {importance}</span>
+                <span>{collapsed ? '已收起' : '已展开'}</span>
+              </div>
+            </div>
+          </div>
+          <div className="flex shrink-0 flex-wrap items-center justify-end gap-1.5 max-md:hidden">
+            {group.importantCount > 0 && <Badge tone="red">重要 {group.importantCount}</Badge>}
+            {group.latestCount > 0 && <Badge tone="green">最新 {group.latestCount}</Badge>}
+            {group.baselineCount > 0 && <Badge tone="orange">基线 {group.baselineCount}</Badge>}
+          </div>
+        </button>
+        {!collapsed && (
+          <div className="bg-bg p-3">
+            <div className="flex flex-col gap-2.5">
+              {group.events.map(renderEventCard)}
+            </div>
+          </div>
+        )}
+      </section>
+    )
+  }
+
+  const renderPagination = () => {
+    if (totalPages <= 1) return null
+
+    return (
+      <div className="mt-6 flex items-center justify-center gap-1.5">
+        <button className="flex h-8 min-w-8 items-center justify-center rounded-sm border border-line bg-surface px-2 text-[0.8rem] text-muted transition hover:bg-line-soft disabled:pointer-events-none disabled:opacity-40" disabled={currentPage <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}><ChevronLeft size={16} /></button>
+        {pageNumbers[0] > 1 && <span className="px-1.5 text-muted">...</span>}
+        {pageNumbers.map((p) => (
+          <button
+            key={p}
+            className={clsx(
+              'flex h-8 min-w-8 items-center justify-center rounded-sm border px-2 text-[0.8rem] transition',
+              currentPage === p ? 'border-accent bg-accent text-white' : 'border-line bg-surface text-muted hover:bg-line-soft'
+            )}
+            onClick={() => setPage(p)}
+          >
+            {p}
+          </button>
+        ))}
+        {pageNumbers[pageNumbers.length - 1] < totalPages && <span className="px-1.5 text-muted">...</span>}
+        <button className="flex h-8 min-w-8 items-center justify-center rounded-sm border border-line bg-surface px-2 text-[0.8rem] text-muted transition hover:bg-line-soft disabled:pointer-events-none disabled:opacity-40" disabled={currentPage >= totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))}><ChevronRight size={16} /></button>
+      </div>
+    )
+  }
+
   return (
     <div>
       <PageHeader title="事件流" description="追踪到的市场动态与开源项目事件" />
@@ -212,7 +348,9 @@ export default function EventsPage() {
         <Select className="w-auto min-w-[140px]" value={groupBy} onChange={e => { setGroupBy(e.target.value as GroupMode); setPage(1) }}>
           {GROUP_OPTIONS.map(option => <option key={option.value} value={option.value}>{option.label}</option>)}
         </Select>
-        <span className="text-[0.8rem] text-muted">{filtered.length} 条结果</span>
+        <span className="text-[0.8rem] text-muted">
+          {groupBy === 'none' ? `${filtered.length} 条结果` : `${filtered.length} 条结果 · ${allGroups.length} 组`}
+        </span>
       </div>
 
       {loading ? (
@@ -221,54 +359,42 @@ export default function EventsPage() {
         </div>
       ) : error ? (
         <EmptyState title="加载失败" description={error} />
-      ) : paged.length === 0 ? (
+      ) : displayEvents.length === 0 ? (
         <EmptyState title="暂无事件" description="等待数据采集完成后将显示事件。" />
       ) : groupBy !== 'none' ? (
-        <div className="flex flex-col gap-[18px]">
-          {grouped.map((group) => (
-            <section key={group.key} className="flex flex-col gap-2.5">
-              <div className="flex items-center justify-between gap-3 rounded border border-line bg-line-soft px-3.5 py-2.5">
-                <div>
-                  <h2 className="m-0 text-[0.95rem] font-bold leading-tight tracking-normal text-text">{group.label}</h2>
-                  <p className="mb-0 mt-1 text-[0.78rem] text-muted">{group.events.length} 条事件</p>
-                </div>
-                <div className="flex flex-wrap items-center justify-end gap-1.5">
-                  {group.latestCount > 0 && <Badge tone="green">最新 {group.latestCount}</Badge>}
-                  {group.baselineCount > 0 && <Badge tone="orange">基线 {group.baselineCount}</Badge>}
-                </div>
-              </div>
-              <div className="flex flex-col gap-2.5">
-                {group.events.map(renderEventCard)}
-              </div>
-            </section>
-          ))}
-        </div>
+        <>
+          <div className="mb-4 flex flex-wrap items-center justify-between gap-3 rounded border border-line bg-surface px-4 py-3">
+            <div className="min-w-0 text-[0.85rem] text-muted">
+              <span className="font-semibold text-text">{groupModeLabel}</span>
+              <span className="mx-2 text-subtle">/</span>
+              <span>共 {allGroups.length} 组，{displayEvents.length} 条事件</span>
+              {totalPages > 1 && (
+                <>
+                  <span className="mx-2 text-subtle">/</span>
+                  <span>第 {currentPage} / {totalPages} 页，每页 {GROUP_PAGE_SIZE} 组</span>
+                </>
+              )}
+            </div>
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" onClick={expandCurrentPageGroups} disabled={visibleCollapsedCount === 0}>
+                <ChevronDown size={14} /> 展开本页
+              </Button>
+              <Button size="sm" onClick={collapseCurrentPageGroups} disabled={pagedGroups.length === 0 || visibleCollapsedCount === pagedGroups.length}>
+                <ChevronRight size={14} /> 收起本页
+              </Button>
+            </div>
+          </div>
+          <div className="flex flex-col gap-3">
+            {pagedGroups.map(renderGroup)}
+          </div>
+        </>
       ) : (
         <div className="flex flex-col gap-2.5">
           {paged.map(renderEventCard)}
         </div>
       )}
 
-      {!loading && !error && totalPages > 1 && (
-        <div className="mt-6 flex items-center justify-center gap-1.5">
-          <button className="flex h-8 min-w-8 items-center justify-center rounded-sm border border-line bg-surface px-2 text-[0.8rem] text-muted transition hover:bg-line-soft disabled:pointer-events-none disabled:opacity-40" disabled={currentPage <= 1} onClick={() => setPage(p => Math.max(1, p - 1))}><ChevronLeft size={16} /></button>
-          {pageNumbers[0] > 1 && <span className="px-1.5 text-muted">...</span>}
-          {pageNumbers.map((p) => (
-            <button
-              key={p}
-              className={clsx(
-                'flex h-8 min-w-8 items-center justify-center rounded-sm border px-2 text-[0.8rem] transition',
-                currentPage === p ? 'border-accent bg-accent text-white' : 'border-line bg-surface text-muted hover:bg-line-soft'
-              )}
-              onClick={() => setPage(p)}
-            >
-              {p}
-            </button>
-          ))}
-          {pageNumbers[pageNumbers.length - 1] < totalPages && <span className="px-1.5 text-muted">...</span>}
-          <button className="flex h-8 min-w-8 items-center justify-center rounded-sm border border-line bg-surface px-2 text-[0.8rem] text-muted transition hover:bg-line-soft disabled:pointer-events-none disabled:opacity-40" disabled={currentPage >= totalPages} onClick={() => setPage(p => Math.min(totalPages, p + 1))}><ChevronRight size={16} /></button>
-        </div>
-      )}
+      {!loading && !error && displayEvents.length > 0 && renderPagination()}
     </div>
   )
 }

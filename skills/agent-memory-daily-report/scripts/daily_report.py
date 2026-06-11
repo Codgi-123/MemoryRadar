@@ -13,7 +13,7 @@ import urllib.request
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(description="Fetch or push Agent Memory daily reports.")
+    parser = argparse.ArgumentParser(description="Fetch or push Agent Memory daily and weekly reports.")
     parser.add_argument("--api-base", default=None, help="Memory Market Watcher API base URL.")
     parser.add_argument(
         "--config",
@@ -39,7 +39,8 @@ def main() -> int:
     try:
         config = load_config(args.config)
         api_base = resolve_api_base(args.api_base, config)
-        report = fetch_report(api_base, args.date, args.latest)
+        report_type = args.report_type
+        report = fetch_report(api_base, report_type, args.date, args.latest)
         if args.command == "fetch":
             if args.format == "json":
                 print(json.dumps(report, ensure_ascii=False, indent=2))
@@ -52,7 +53,7 @@ def main() -> int:
         if not webhook_url:
             raise SystemExit("Missing webhook URL. Set MEMORY_REPORT_WEBHOOK_URL or pass --webhook-url.")
         push_report(webhook_url, webhook_type, report)
-        print(f"Pushed report {report['report_date']} to {webhook_type} webhook.")
+        print(f"Pushed {report_type} report {report['report_date']} to {webhook_type} webhook.")
         return 0
     except urllib.error.HTTPError as exc:
         if exc.code == 404:
@@ -66,21 +67,27 @@ def main() -> int:
 
 
 def add_report_args(parser: argparse.ArgumentParser) -> None:
+    parser.add_argument(
+        "--report-type",
+        choices=["daily", "weekly"],
+        default="daily",
+        help="Report type to fetch or push. Defaults to daily.",
+    )
     group = parser.add_mutually_exclusive_group(required=True)
     group.add_argument("--date", help="Report date as YYYY-MM-DD, today, or yesterday.")
     group.add_argument("--latest", action="store_true", help="Use the newest report from the list endpoint.")
 
 
-def fetch_report(api_base: str, date_value: str | None, latest: bool) -> dict:
+def fetch_report(api_base: str, report_type: str, date_value: str | None, latest: bool) -> dict:
     api_base = api_base.rstrip("/")
     if latest:
-        reports = request_json(f"{api_base}/api/reports/daily")
+        reports = request_json(f"{api_base}/api/reports/{report_type}")
         if not reports:
-            raise SystemExit("No generated reports found.")
+            raise SystemExit(f"No generated {report_type} reports found.")
         return reports[0]
 
     report_date = normalize_date(date_value or "today")
-    return request_json(f"{api_base}/api/reports/daily/{urllib.parse.quote(report_date)}")
+    return request_json(f"{api_base}/api/reports/{report_type}/{urllib.parse.quote(report_date)}")
 
 
 def load_config(path_value: str | None) -> dict:
@@ -140,7 +147,8 @@ def push_report(webhook_url: str, webhook_type: str, report: dict) -> None:
 
 
 def build_payload(webhook_type: str, report: dict) -> dict:
-    title = report.get("title") or f"Agent Memory Daily Report - {report.get('report_date', '')}"
+    report_type = report.get("report_type") or "daily"
+    title = report.get("title") or f"Agent Memory {report_type.title()} Report - {report.get('report_date', '')}"
     markdown = report.get("content_markdown") or ""
     text = f"{title}\n\n{markdown}".strip()
 
