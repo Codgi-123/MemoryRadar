@@ -10,7 +10,7 @@ from app.db import Base
 from app.main import list_reports, list_weekly_reports, require_admin
 from app.models import Event, Project, RawItem, Report, SearchQuery
 from app.settings import settings
-from app.processors.events import _date_signal, create_events_from_raw
+from app.processors.events import _date_signal, create_events_from_raw, score_serper_candidate
 from app.processors.github_radar import _changed_since, _since_start
 from app.schemas import ProjectIn
 
@@ -29,6 +29,75 @@ class BackendLogicTest(unittest.TestCase):
 
         self.assertEqual(signal["event_date"], date(2026, 1, 2))
         self.assertEqual(signal["confidence"], "low")
+
+    def test_score_serper_candidate_drops_hardware_memory_noise(self) -> None:
+        raw = RawItem(
+            source="serper_search",
+            url="https://example.com/nvidia-ai-pc-memory-market",
+            title="NVIDIA AI PC memory market expected to grow in 2026",
+            snippet="Analysts discuss GPU memory, DRAM, and Windows PC chip demand.",
+            published_at=datetime(2026, 6, 3, 9, 0, 0),
+            fetched_at=datetime(2026, 6, 3, 9, 5, 0),
+        )
+
+        score = score_serper_candidate(raw, date(2026, 6, 3))
+
+        self.assertTrue(score.should_drop)
+        self.assertLess(score.relevance, 0.35)
+        self.assertIn("noise", score.reason)
+
+    def test_low_score_serper_candidate_does_not_create_event(self) -> None:
+        engine = create_engine("sqlite:///:memory:")
+        Base.metadata.create_all(bind=engine)
+        SessionLocal = sessionmaker(bind=engine)
+        db = SessionLocal()
+        try:
+            db.add(
+                RawItem(
+                    source="serper_search",
+                    url="https://example.com/nvidia-ai-pc-memory-market",
+                    title="NVIDIA AI PC memory market expected to grow in 2026",
+                    snippet="Analysts discuss GPU memory, DRAM, and Windows PC chip demand.",
+                    published_at=datetime(2026, 6, 3, 9, 0, 0),
+                    fetched_at=datetime(2026, 6, 3, 9, 5, 0),
+                )
+            )
+            db.commit()
+
+            inserted = create_events_from_raw(db, target_date=date(2026, 6, 3))
+
+            self.assertEqual(inserted, 0)
+            self.assertEqual(db.query(Event).count(), 0)
+        finally:
+            db.close()
+
+    def test_high_score_serper_candidate_keeps_event_with_score_reason(self) -> None:
+        engine = create_engine("sqlite:///:memory:")
+        Base.metadata.create_all(bind=engine)
+        SessionLocal = sessionmaker(bind=engine)
+        db = SessionLocal()
+        try:
+            db.add(
+                RawItem(
+                    source="serper_search",
+                    url="https://mem0.ai/changelog/v1-2-benchmark",
+                    title="Mem0 v1.2 benchmark update improves agent memory retrieval",
+                    snippet="The new version adds benchmark results and updated memory APIs.",
+                    published_at=datetime(2026, 6, 3, 9, 0, 0),
+                    fetched_at=datetime(2026, 6, 3, 9, 5, 0),
+                )
+            )
+            db.commit()
+
+            inserted = create_events_from_raw(db, target_date=date(2026, 6, 3))
+
+            self.assertEqual(inserted, 1)
+            event = db.query(Event).one()
+            self.assertTrue(event.is_market_latest)
+            self.assertGreaterEqual(event.importance_score, 0.75)
+            self.assertIn("Serper candidate score", event.evidence_reason or "")
+        finally:
+            db.close()
 
     def test_follow_on_pr_coverage_is_not_market_latest_during_cooldown(self) -> None:
         engine = create_engine("sqlite:///:memory:")
