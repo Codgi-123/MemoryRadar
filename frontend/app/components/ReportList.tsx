@@ -5,6 +5,7 @@ import { CalendarDays, ChevronDown, ChevronRight, FileText, RefreshCw } from 'lu
 import { apiGet, apiPost, formatDate, formatRelativeTime, getAppTargetDate } from '@/lib/client-api'
 import { MarkdownContent } from '@/components/MarkdownContent'
 import { AdminGate } from './AdminGate'
+import { Badge, Button, Card, EmptyState, Skeleton } from './ui'
 
 export interface ReportOut {
   id: number
@@ -29,7 +30,7 @@ interface ReportListProps {
 
 function EmptyIcon({ type }: { type: 'daily' | 'weekly' }) {
   const Icon = type === 'weekly' ? CalendarDays : FileText
-  return <Icon size={40} style={{ opacity: 0.3 }} />
+  return <Icon size={40} className="mb-2 text-subtle opacity-40" />
 }
 
 export function ReportList({
@@ -88,52 +89,53 @@ export function ReportList({
 
   return (
     <>
-      <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 16 }}>
+      <div className="mb-4 flex justify-end">
         <AdminGate message="重新生成报告会调用 LLM 并消耗服务配额。">
-          <button className="btn btn-primary" onClick={regenerate} disabled={generating}>
-            <RefreshCw size={16} className={generating ? 'spin' : ''} />
+          <Button variant="primary" onClick={regenerate} disabled={generating}>
+            <RefreshCw size={16} className={generating ? 'animate-spin' : undefined} />
             {generating ? generatingLabel : generateLabel}
-          </button>
+          </Button>
         </AdminGate>
       </div>
 
-      {error && <div className="cold-start-banner" style={{ marginBottom: 16 }}>{error}</div>}
+      {error && <div className="mb-4 flex items-center gap-2 rounded border border-warning bg-warning-soft px-4 py-3 text-[0.875rem] font-medium text-text">{error}</div>}
 
       {loading ? (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
-          {[1,2,3].map(i => <div key={i} className="skeleton" style={{ height: 80, borderRadius: 'var(--radius-lg)' }} />)}
+        <div className="flex flex-col gap-3">
+          {[1,2,3].map(i => <Skeleton key={i} className="h-20 rounded" />)}
         </div>
       ) : reports.length === 0 ? (
-        <div className="empty-state">
+        <EmptyState title={emptyTitle} description={emptyDescription}>
           <EmptyIcon type={emptyIcon} />
-          <h3>{emptyTitle}</h3>
-          <p>{emptyDescription}</p>
-        </div>
+        </EmptyState>
       ) : (
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+        <div className="flex flex-col gap-3">
           {reports.map((report) => {
             const expanded = expandedIds.has(report.id)
             return (
-              <div key={report.id} className="card animate-in" style={{ padding: 0, overflow: 'hidden' }}>
-                <div onClick={() => toggleExpand(report.id)} style={{ display: 'flex', alignItems: 'center', justifyContent: 'space-between', padding: '16px 24px', cursor: 'pointer', borderBottom: expanded ? '1px solid var(--line-soft)' : 'none' }}>
-                  <div style={{ display: 'flex', alignItems: 'center', gap: 12 }}>
+              <Card key={report.id} className="animate-[fadeInUp_400ms_ease_both] overflow-hidden p-0">
+                <div
+                  className="flex cursor-pointer items-center justify-between gap-4 px-6 py-4 transition hover:bg-bg max-md:items-start"
+                  onClick={() => toggleExpand(report.id)}
+                >
+                  <div className="flex min-w-0 items-center gap-3">
                     {expanded ? <ChevronDown size={16} /> : <ChevronRight size={16} />}
-                    <div>
-                      <div style={{ fontWeight: 600 }}>{report.title}</div>
-                      <div className="text-muted text-sm" style={{ marginTop: 2 }}>
+                    <div className="min-w-0">
+                      <div className="truncate font-semibold text-text">{report.title}</div>
+                      <div className="mt-0.5 flex flex-wrap items-center gap-2 text-[0.8rem] text-muted">
                         {datePrefix}{formatDate(report.report_date)}
-                        {report.generated_by_model && <span className="badge badge--gray" style={{ marginLeft: 8 }}>{report.generated_by_model}</span>}
+                        {report.generated_by_model && <Badge>{report.generated_by_model}</Badge>}
                       </div>
                     </div>
                   </div>
-                  <span className="text-muted text-sm">{formatRelativeTime(report.created_at)}</span>
+                  <span className="shrink-0 text-[0.8rem] text-muted">{formatRelativeTime(report.created_at)}</span>
                 </div>
                 {expanded && (
-                  <div style={{ padding: '20px 24px' }}>
+                  <div className="border-t border-line-soft px-6 py-5">
                     <MarkdownContent content={report.content_markdown} />
                   </div>
                 )}
-              </div>
+              </Card>
             )
           })}
         </div>

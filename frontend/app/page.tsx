@@ -1,6 +1,9 @@
 import Link from 'next/link'
+import type { ReactNode } from 'react'
 import { LayoutDashboard, Zap, Star, FileText, CheckCircle, XCircle, Clock, Loader, AlertTriangle } from 'lucide-react'
 import { MarkdownContent } from '@/components/MarkdownContent'
+import { Badge, Card, EmptyState, PageHeader } from './components/ui'
+import type { Tone } from './components/ui'
 
 export const dynamic = 'force-dynamic'
 
@@ -55,6 +58,32 @@ function formatDateTime(dateStr: string): string {
   return d.toLocaleString('zh-CN', { month: '2-digit', day: '2-digit', hour: '2-digit', minute: '2-digit' })
 }
 
+function statusTone(status: string): Tone {
+  if (status === 'success') return 'green'
+  if (status === 'failed') return 'red'
+  if (status === 'running') return 'blue'
+  return 'gray'
+}
+
+function StatCard({ tone, icon, label, value }: { tone: 'blue' | 'green' | 'orange' | 'purple'; icon: ReactNode; label: string; value: number }) {
+  const toneClass = {
+    blue: 'bg-accent-soft text-accent',
+    green: 'bg-success-soft text-success',
+    orange: 'bg-orange-soft text-orange',
+    purple: 'bg-purple-soft text-purple',
+  }[tone]
+
+  return (
+    <Card className="p-5">
+      <div className={`mb-3 flex h-9 w-9 items-center justify-center rounded bg-current/10 ${toneClass}`}>
+        {icon}
+      </div>
+      <div className="mb-1 text-[0.8rem] font-medium text-muted">{label}</div>
+      <div className="font-mono text-3xl font-bold leading-none text-text">{value}</div>
+    </Card>
+  )
+}
+
 export default async function DashboardPage() {
   let data: DashboardData
   try {
@@ -63,10 +92,7 @@ export default async function DashboardPage() {
     console.error('Dashboard SSR fetch failed:', error)
     return (
       <div>
-        <div className="page-header">
-          <h1>总览</h1>
-          <p>后端服务未响应，请检查 API 服务是否正常运行：{publicBase}</p>
-        </div>
+        <PageHeader title="总览" description={`后端服务未响应，请检查 API 服务是否正常运行：${publicBase}`} />
       </div>
     )
   }
@@ -74,86 +100,65 @@ export default async function DashboardPage() {
   return (
     <div>
       {data.report_context.is_cold_start && (
-        <div className="cold-start-banner">
+        <div className="mb-6 flex items-center gap-2 rounded border border-warning bg-warning-soft px-4 py-3 text-[0.875rem] font-medium text-text">
           <AlertTriangle size={16} />
           <span>系统处于冷启动阶段 — 建议先运行「数据采集」任务初始化基线数据。</span>
         </div>
       )}
 
-      <div className="page-header">
-        <h1>总览</h1>
-        <p>Agent Memory 市场动态追踪系统概览</p>
+      <PageHeader title="总览" description="Agent Memory 市场动态追踪系统概览" />
+
+      <div className="mb-8 grid grid-cols-[repeat(auto-fit,minmax(180px,1fr))] gap-4">
+        <StatCard tone="blue" icon={<LayoutDashboard size={18} />} label="追踪项目" value={data.projects} />
+        <StatCard tone="green" icon={<Zap size={18} />} label="今日事件" value={data.events_today} />
+        <StatCard tone="orange" icon={<Star size={18} />} label="重要事件" value={data.important_events} />
+        <StatCard tone="purple" icon={<FileText size={18} />} label="日报总数" value={data.reports} />
       </div>
 
-      <div className="stat-grid">
-        <div className="stat-card stat-card--blue">
-          <div className="stat-card__icon"><LayoutDashboard size={18} /></div>
-          <div className="stat-card__label">追踪项目</div>
-          <div className="stat-card__value">{data.projects}</div>
-        </div>
-        <div className="stat-card stat-card--green">
-          <div className="stat-card__icon"><Zap size={18} /></div>
-          <div className="stat-card__label">今日事件</div>
-          <div className="stat-card__value">{data.events_today}</div>
-        </div>
-        <div className="stat-card stat-card--orange">
-          <div className="stat-card__icon"><Star size={18} /></div>
-          <div className="stat-card__label">重要事件</div>
-          <div className="stat-card__value">{data.important_events}</div>
-        </div>
-        <div className="stat-card stat-card--purple">
-          <div className="stat-card__icon"><FileText size={18} /></div>
-          <div className="stat-card__label">日报总数</div>
-          <div className="stat-card__value">{data.reports}</div>
-        </div>
-      </div>
-
-      <div className="dashboard-grid">
-        <div className="card">
-          <div className="card-header">
-            <h3>{data.latest_report ? data.latest_report.title : '暂无日报'}</h3>
-            {data.latest_report && <span className="text-muted text-sm">{data.latest_report.report_date}</span>}
+      <div className="grid grid-cols-[minmax(0,1.35fr)_minmax(280px,0.65fr)] gap-6 max-lg:grid-cols-1">
+        <Card>
+          <div className="mb-4 flex items-center justify-between gap-3 border-b border-line-soft pb-4">
+            <h3 className="text-[1.05rem] font-semibold tracking-normal text-text">{data.latest_report ? data.latest_report.title : '暂无日报'}</h3>
+            {data.latest_report && <span className="text-[0.8rem] text-muted">{data.latest_report.report_date}</span>}
           </div>
           {data.latest_report ? (
             <>
               <MarkdownContent content={data.latest_report.content_markdown.slice(0, 600)} />
               <div className="mt-4">
-                <Link href="/reports" className="btn btn-secondary">查看完整日报 →</Link>
+                <Link href="/reports" className="inline-flex items-center justify-center gap-2 rounded-sm border border-line bg-surface px-4 py-2.5 text-[0.875rem] font-medium text-muted no-underline transition hover:bg-line-soft hover:text-text">查看完整日报 →</Link>
               </div>
             </>
           ) : (
-            <div className="empty-state">
-              <p>尚未生成日报，请前往任务页面执行采集。</p>
-            </div>
+            <EmptyState description="尚未生成日报，请前往任务页面执行采集。" />
           )}
-        </div>
+        </Card>
 
-        <div className="card">
-          <div className="card-header">
-            <h3>最近任务</h3>
+        <Card>
+          <div className="mb-4 border-b border-line-soft pb-4">
+            <h3 className="text-[1.05rem] font-semibold tracking-normal text-text">最近任务</h3>
           </div>
           {data.recent_jobs.length > 0 ? (
-            <div style={{ display: 'flex', flexDirection: 'column', gap: 12 }}>
+            <div className="flex flex-col gap-3">
               {data.recent_jobs.map((job) => (
-                <div key={job.id} style={{ display: 'flex', alignItems: 'center', gap: 12, padding: '8px 0', borderBottom: '1px solid var(--line-soft)' }}>
-                  {job.status === 'success' && <CheckCircle size={16} style={{ color: 'var(--success)' }} />}
-                  {job.status === 'failed' && <XCircle size={16} style={{ color: 'var(--danger)' }} />}
-                  {job.status === 'running' && <Loader size={16} style={{ color: 'var(--accent)' }} />}
-                  {!['success', 'failed', 'running'].includes(job.status) && <Clock size={16} style={{ color: 'var(--subtle)' }} />}
-                  <div style={{ flex: 1 }}>
-                    <div style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                      <span className="badge badge--blue">{job.job_type}</span>
-                      <span className={`badge ${job.status === 'success' ? 'badge--green' : job.status === 'failed' ? 'badge--red' : job.status === 'running' ? 'badge--blue' : 'badge--gray'}`}>{job.status}</span>
+                <div key={job.id} className="flex items-center gap-3 border-b border-line-soft py-2 last:border-b-0">
+                  {job.status === 'success' && <CheckCircle size={16} className="text-success" />}
+                  {job.status === 'failed' && <XCircle size={16} className="text-danger" />}
+                  {job.status === 'running' && <Loader size={16} className="text-accent" />}
+                  {!['success', 'failed', 'running'].includes(job.status) && <Clock size={16} className="text-subtle" />}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex flex-wrap items-center gap-2">
+                      <Badge tone="blue">{job.job_type}</Badge>
+                      <Badge tone={statusTone(job.status)}>{job.status}</Badge>
                     </div>
-                    <div className="text-muted text-sm" style={{ marginTop: 4 }}>{formatDateTime(job.started_at)}</div>
+                    <div className="mt-1 text-[0.8rem] text-muted">{formatDateTime(job.started_at)}</div>
                   </div>
                 </div>
               ))}
             </div>
           ) : (
-            <div className="empty-state"><p>暂无任务记录</p></div>
+            <EmptyState description="暂无任务记录" />
           )}
-        </div>
+        </Card>
       </div>
     </div>
   )

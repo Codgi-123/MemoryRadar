@@ -1,14 +1,10 @@
 import { ReportList } from '../components/ReportList'
+import { PageHeader } from '../components/ui'
 
 export default function WeeklyPage() {
   return (
     <div>
-      <div className="page-header">
-        <div>
-          <h1>市场周报</h1>
-          <p>从近 7 天日报中提取版本更新、功能进展与能力变化</p>
-        </div>
-      </div>
+      <PageHeader title="市场周报" description="从近 7 天日报中提取版本更新、功能进展与能力变化" />
       <ReportList
         endpoint="/api/reports/weekly"
         regenerateBase="/api/reports/weekly"

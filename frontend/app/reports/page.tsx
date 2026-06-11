@@ -1,11 +1,10 @@
 import { ReportList } from '../components/ReportList'
+import { PageHeader } from '../components/ui'
 
 export default function ReportsPage() {
   return (
     <div>
-      <div className="page-header">
-        <div><h1>市场日报</h1><p>LLM 生成的 Agent Memory 市场每日简报</p></div>
-      </div>
+      <PageHeader title="市场日报" description="LLM 生成的 Agent Memory 市场每日简报" />
       <ReportList
         endpoint="/api/reports/daily"
         regenerateBase="/api/reports/daily"

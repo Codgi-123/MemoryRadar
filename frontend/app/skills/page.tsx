@@ -2,6 +2,7 @@
 
 import { useEffect, useState } from 'react'
 import { Check, Copy, Puzzle } from 'lucide-react'
+import { Button, Card, PageHeader } from '../components/ui'
 
 const configuredApiUrl = normalizeConfiguredApiUrl(process.env.NEXT_PUBLIC_API_URL)
 
@@ -66,12 +67,12 @@ function CodeBlock({ value }: { value: string }) {
   }
 
   return (
-    <div className="skill-code">
-      <button className="btn btn-sm btn-secondary skill-copy" onClick={copy}>
+    <div className="relative rounded border border-line bg-[#0f172a] p-4 text-slate-100">
+      <Button size="sm" className="absolute right-3 top-3 border-slate-600 bg-slate-800 text-slate-200 hover:bg-slate-700 hover:text-white" onClick={copy}>
         {copied ? <Check size={13} /> : <Copy size={13} />}
         {copied ? '已复制' : '复制'}
-      </button>
-      <pre>{value}</pre>
+      </Button>
+      <pre className="m-0 overflow-x-auto pr-24 font-mono text-[0.86rem] leading-relaxed">{value}</pre>
     </div>
   )
 }
@@ -88,25 +89,20 @@ export default function SkillsPage() {
 
   return (
     <div>
-      <div className="page-header">
-        <h1>Agent Skills</h1>
-        <p>一行命令安装「Agent Memory 市场日报」Skill，让其他 Agent 能自动获取和推送每日日报。</p>
-      </div>
+      <PageHeader title="Agent Skills" description="一行命令安装「Agent Memory 市场日报」Skill，让其他 Agent 能自动获取和推送每日日报。" />
 
-      <div className="card" style={{ borderColor: 'var(--accent)', background: 'var(--accent-soft)' }}>
-        <div className="card-header" style={{ borderBottom: 'none', paddingBottom: 0, marginBottom: 12 }}>
-          <span style={{ display: 'inline-flex', alignItems: 'center', gap: 8, color: 'var(--accent)' }}>
+      <Card className="border-accent bg-accent-soft">
+        <div className="mb-3 flex items-center gap-2 font-semibold text-accent">
             <Puzzle size={17} /> 让 Agent 安装此 Skill
-          </span>
         </div>
-        <p className="text-sm" style={{ marginBottom: 12 }}>
+        <p className="mb-3 text-[0.875rem] leading-relaxed text-text">
           直接把下面这句话发给你的 Agent（Claude Code / Codex / Cursor / Gemini CLI），它会自动读取 SKILL.md 并执行安装：
         </p>
         <CodeBlock value={agentInstruction} />
-        <p className="text-muted text-sm" style={{ marginTop: 12 }}>
+        <p className="mt-3 text-[0.875rem] leading-relaxed text-muted">
           Agent 会访问上面的 SKILL.md 链接（纯文本 Markdown），读到安装命令后自动执行 <code>curl ... | bash</code> 完成安装。
         </p>
-      </div>
+      </Card>
     </div>
   )
 }

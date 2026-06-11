@@ -1,7 +1,8 @@
 'use client'
 
-import { createContext, useContext, useEffect, useMemo, useState } from 'react'
+import { createContext, useContext, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { apiGet, clearAdminToken, getAdminToken, setAdminToken, verifyAdminToken } from '@/lib/client-api'
+import { Badge, Button, Card, Input } from './ui'
 
 interface SettingsStatus {
   admin_required?: boolean
@@ -22,7 +23,7 @@ function useAdminContext() {
   return context
 }
 
-export function AdminProvider({ children }: { children: React.ReactNode }) {
+export function AdminProvider({ children }: { children: ReactNode }) {
   const [adminRequired, setAdminRequired] = useState<boolean | null>(null)
   const [unlocked, setUnlocked] = useState(false)
 
@@ -95,19 +96,18 @@ export function AdminStatusBar() {
   }
 
   return (
-    <div className="card" style={{ marginBottom: 18, padding: '12px 16px', display: 'flex', alignItems: 'center', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap' }}>
+    <Card className="mb-[18px] flex flex-wrap items-center justify-between gap-3 px-4 py-3">
       <div>
-        <div style={{ fontWeight: 600 }}>{unlocked ? '管理员模式已开启' : '公开只读模式'}</div>
-        <div className="text-muted text-sm">
+        <div className="font-semibold">{unlocked ? '管理员模式已开启' : '公开只读模式'}</div>
+        <div className="text-[0.82rem] text-muted">
           {unlocked ? '可执行采集、回填、报告生成和增删改操作。' : '输入管理员口令后，才会显示会修改数据或消耗配额的操作。'}
         </div>
       </div>
       {unlocked ? (
-        <button className="btn btn-sm btn-secondary" onClick={logout}>退出管理员模式</button>
+        <Button size="sm" onClick={logout}>退出管理员模式</Button>
       ) : (
-        <div style={{ display: 'flex', gap: 8, flexWrap: 'wrap' }}>
-          <input
-            className="form-input"
+        <div className="flex flex-wrap gap-2">
+          <Input
             type="password"
             value={token}
             onChange={(event) => {
@@ -118,20 +118,20 @@ export function AdminStatusBar() {
               if (event.key === 'Enter') submit()
             }}
             placeholder="管理员口令"
-            style={{ maxWidth: 260 }}
+            className="max-w-[260px]"
           />
-          <button className="btn btn-primary" disabled={!token.trim() || checking} onClick={submit}>
+          <Button variant="primary" disabled={!token.trim() || checking} onClick={submit}>
             {checking ? '校验中...' : '解锁'}
-          </button>
-          {error && <span className="text-sm" style={{ color: 'var(--danger)', alignSelf: 'center' }}>{error}</span>}
+          </Button>
+          {error && <span className="self-center text-[0.82rem] text-danger">{error}</span>}
         </div>
       )}
-    </div>
+    </Card>
   )
 }
 
 interface AdminGateProps {
-  children: React.ReactNode
+  children: ReactNode
   message?: string
 }
 
@@ -141,5 +141,5 @@ export function AdminGate({ children, message = '此操作需要先到设置页�
   if (adminRequired === null) return null
   if (!adminRequired || unlocked) return <>{children}</>
 
-  return <span className="badge badge--gray" title={message}>需管理员解锁</span>
+  return <Badge title={message}>需管理员解锁</Badge>
 }
