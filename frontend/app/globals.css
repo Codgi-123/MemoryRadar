@@ -469,6 +469,75 @@ body {
   padding-right: 36px;
 }
 
+.tag-input {
+  width: 100%;
+  min-height: 44px;
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  padding: 7px 8px;
+  border: 1px solid var(--line);
+  border-radius: var(--radius-sm);
+  background: var(--surface);
+  cursor: text;
+  transition: border-color var(--transition), box-shadow var(--transition);
+}
+
+.tag-input:focus-within {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+
+.tag-input__field {
+  flex: 1 1 160px;
+  min-width: 120px;
+  height: 28px;
+  border: 0;
+  outline: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 0.875rem;
+}
+
+.tag-input__field::placeholder {
+  color: var(--subtle);
+}
+
+.query-tag {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  max-width: 100%;
+  min-height: 28px;
+  padding: 4px 6px 4px 10px;
+  border-radius: 9999px;
+  background: var(--accent-soft);
+  color: var(--accent);
+  font-size: 0.78rem;
+  font-weight: 500;
+  line-height: 1.2;
+  overflow-wrap: anywhere;
+}
+
+.query-tag__remove {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  border: 0;
+  border-radius: 9999px;
+  background: transparent;
+  color: currentColor;
+  cursor: pointer;
+}
+
+.query-tag__remove:hover {
+  background: var(--accent-muted);
+}
+
 /* ===== Modal ===== */
 .modal-overlay {
   position: fixed;

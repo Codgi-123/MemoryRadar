@@ -1,6 +1,6 @@
 'use client'
 
-import { useState, useEffect, useCallback } from 'react'
+import { useState, useEffect, useCallback, useRef, type KeyboardEvent } from 'react'
 import { Plus, Edit2, Trash2, ExternalLink, X, Download, Upload } from 'lucide-react'
 import { apiGet, apiPost, apiPatch, apiDelete } from '@/lib/client-api'
 import { Toast } from '../components/Toast'
@@ -30,7 +30,11 @@ function normalizeGitHubRepo(value: string) {
 }
 
 function parseQueries(value: string) {
-  return Array.from(new Set(value.split(',').map(q => q.trim()).filter(Boolean)))
+  return value.split(/[,，;；\n]/).map(q => q.trim()).filter(Boolean)
+}
+
+function uniqueQueries(queries: string[]) {
+  return Array.from(new Set(queries.map(q => q.trim()).filter(Boolean)))
 }
 
 export default function WatchlistPage() {
@@ -40,6 +44,7 @@ export default function WatchlistPage() {
   const [editingId, setEditingId] = useState<number | null>(null)
   const [form, setForm] = useState<ProjectForm>(emptyForm)
   const [queryInput, setQueryInput] = useState('')
+  const queryInputRef = useRef<HTMLInputElement>(null)
   const [deleteId, setDeleteId] = useState<number | null>(null)
   const [toast, setToast] = useState<{ message: string; type: 'success' | 'error' | 'info' } | null>(null)
 
@@ -58,18 +63,57 @@ export default function WatchlistPage() {
   const openEdit = (p: Project) => {
     setEditingId(p.id)
     setForm({ name: p.name, type: p.type, github_repo: p.github_repo || '', homepage_url: p.homepage_url || '', enabled: p.enabled, priority: p.priority, queries: p.queries })
-    setQueryInput(p.queries.join(', '))
+    setQueryInput('')
     setShowModal(true)
   }
 
+  const addQueries = (values: string[]) => {
+    setForm(prev => ({ ...prev, queries: uniqueQueries([...prev.queries, ...values]) }))
+  }
+
+  const removeQuery = (query: string) => {
+    setForm(prev => ({ ...prev, queries: prev.queries.filter(item => item !== query) }))
+  }
+
+  const handleQueryInputChange = (value: string) => {
+    if (!/[,，;；\n]/.test(value)) {
+      setQueryInput(value)
+      return
+    }
+    const parts = value.split(/[,，;；\n]/)
+    addQueries(parts.slice(0, -1))
+    setQueryInput(parts[parts.length - 1] || '')
+  }
+
+  const commitQueryInput = () => {
+    const queries = parseQueries(queryInput)
+    if (queries.length > 0) addQueries(queries)
+    setQueryInput('')
+  }
+
+  const handleQueryKeyDown = (event: KeyboardEvent<HTMLInputElement>) => {
+    if (event.key === 'Enter' || event.key === 'Tab') {
+      if (queryInput.trim()) {
+        event.preventDefault()
+        commitQueryInput()
+      }
+      return
+    }
+    if (event.key === 'Backspace' && !queryInput && form.queries.length > 0) {
+      event.preventDefault()
+      setForm(prev => ({ ...prev, queries: prev.queries.slice(0, -1) }))
+    }
+  }
+
   const handleSave = async () => {
+    const queries = uniqueQueries([...form.queries, ...parseQueries(queryInput)])
     const payload = {
       ...form,
       name: form.name.trim(),
       github_repo: normalizeOptional(normalizeGitHubRepo(form.github_repo)),
       homepage_url: normalizeOptional(form.homepage_url),
       priority: Math.min(10, Math.max(1, form.priority || 1)),
-      queries: parseQueries(queryInput),
+      queries,
     }
     if (!payload.name) {
       setToast({ message: '项目名称不能为空', type: 'error' })
@@ -226,8 +270,26 @@ export default function WatchlistPage() {
               <input className="form-input" type="number" min={1} max={10} value={form.priority} onChange={e => setForm({...form, priority: Number(e.target.value)})} />
             </div>
             <div className="form-group">
-              <label className="form-label">搜索词（逗号分隔）</label>
-              <input className="form-input" value={queryInput} onChange={e => setQueryInput(e.target.value)} placeholder="mem0 memory, agent memory" />
+              <label className="form-label">搜索词</label>
+              <div className="tag-input" onClick={() => queryInputRef.current?.focus()}>
+                {form.queries.map((query) => (
+                  <span key={query} className="query-tag">
+                    {query}
+                    <button type="button" className="query-tag__remove" onClick={(event) => { event.stopPropagation(); removeQuery(query) }} aria-label={`删除 ${query}`}>
+                      <X size={12} />
+                    </button>
+                  </span>
+                ))}
+                <input
+                  ref={queryInputRef}
+                  className="tag-input__field"
+                  value={queryInput}
+                  onChange={e => handleQueryInputChange(e.target.value)}
+                  onKeyDown={handleQueryKeyDown}
+                  onBlur={commitQueryInput}
+                  placeholder={form.queries.length === 0 ? '输入搜索词后按 Enter' : ''}
+                />
+              </div>
             </div>
             <div className="form-group">
               <label style={{ display: 'flex', alignItems: 'center', gap: 8, cursor: 'pointer' }}>
