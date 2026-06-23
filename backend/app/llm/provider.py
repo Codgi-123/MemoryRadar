@@ -11,9 +11,9 @@ async def summarize_daily(
 ) -> tuple[str, str]:
     prompt = _build_prompt(events, previous_report, project_radar or [], report_context or {})
     if settings.llm_provider == "anthropic" and settings.anthropic_api_key:
-        return await _anthropic(prompt)
+        return await _anthropic(prompt, timeout=600)
     if settings.openai_api_key:
-        return await _openai(prompt)
+        return await _openai(prompt, timeout=600)
     return _fallback_summary(events), "fallback-no-llm"
 
 

@@ -99,7 +99,7 @@ def run_collection_job(job_id: int, days: int = 1) -> None:
                 _set_state(db, "baseline_days", str(days))
         except Exception as exc:
             job.status = JobStatus.failed.value
-            job.error_message = str(exc)
+            job.error_message = f"{type(exc).__name__}: {exc}"
         finally:
             job.finished_at = utc_now()
             db.commit()
@@ -230,7 +230,7 @@ def run_daily_job(db: Session) -> dict:
         return {"job_id": job.id, "collection": collection, "report_id": report.id}
     except Exception as exc:
         job.status = JobStatus.failed.value
-        job.error_message = str(exc)
+        job.error_message = f"{type(exc).__name__}: {exc}"
         job.finished_at = utc_now()
         db.commit()
         raise
@@ -248,7 +248,7 @@ def run_weekly_job(db: Session) -> dict:
         return {"job_id": job.id, "report_id": report.id}
     except Exception as exc:
         job.status = JobStatus.failed.value
-        job.error_message = str(exc)
+        job.error_message = f"{type(exc).__name__}: {exc}"
         job.finished_at = utc_now()
         db.commit()
         raise
